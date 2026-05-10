@@ -1059,7 +1059,43 @@
             padding-left: 8px;
             flex: 0 0 auto;
         }
+        /* ===== 终端上的宠物小精灵 ===== */
+        .pet-elf {
+            position: absolute;
+            top: -42px; /* 稍微再往上提一点点 */
+            right: 40px; 
+            width: 50px;
+            height: auto;
+            z-index: 120;
+            pointer-events: none; 
+            animation: elfBreathe 3s ease-in-out infinite;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
 
+        @keyframes elfBreathe {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .floating-console.minimized .pet-elf {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        /* 👇👇👇 新增：解除终端边缘的裁剪限制，并完美修补内部圆角 👇👇👇 */
+        .floating-console:not(.minimized) {
+            overflow: visible !important; /* 允许小精灵溢出窗体 */
+        }
+        .floating-console:not(.minimized) .terminal-head {
+            /* 顶部标题栏恢复圆角 */
+            border-top-left-radius: var(--radius-xl);
+            border-top-right-radius: var(--radius-xl);
+        }
+        .floating-console:not(.minimized) .terminal-input:last-child {
+            /* 底部 AI 控制栏恢复圆角 */
+            border-bottom-left-radius: var(--radius-xl);
+            border-bottom-right-radius: var(--radius-xl);
+        }
         /* 收起状态：变成一个可吸附的小圆球。点击小圆球恢复终端。 */
         .floating-console.minimized {
             width: 72px !important;
@@ -2222,20 +2258,37 @@
 
         <div class="console-spacer" id="console"></div>
         <section class="terminal floating-console" id="floatingConsole">
+            
+            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/25.gif" alt="Pikachu" class="pet-elf" />
+
             <div class="terminal-head" id="terminalDragHandle">
                 <div class="console-controls" aria-label="Console controls">
-                    <button class="dot" title="收起成小圆球 / 展开终端" onclick="toggleConsole(event)"
-                        aria-label="收起成小圆球或展开终端"></button>
+                    <button class="dot" title="收起成小圆球 / 展开终端" onclick="toggleConsole(event)" aria-label="收起成小圆球或展开终端"></button>
                     <button class="dot y" title="归位终端" onclick="resetConsoleDock(event)" aria-label="归位终端"></button>
                     <button class="dot g" title="清空终端" onclick="clearConsole(event)" aria-label="清空终端"></button>
                 </div>
                 <span class="small console-title">常驻 Kernel Console · 红点收起成小圆球 · 拖动标题栏移动 · 拖拽右下角调整大小 · Tab 补全</span>
                 <span class="resize-hint" title="拖动右下角调整大小">↘</span>
             </div>
+            
             <div id="terminalOutput"></div>
-            <div class="terminal-input"><input id="cmdInput"
+            
+            <div class="terminal-input">
+                <input id="cmdInput"
                     placeholder="root# 输入命令，按 Tab 自动补全，例如 create editor 10 4096 8" autocomplete="off"
-                    spellcheck="false" /><button class="btn-primary" onclick="sendCommand()">Send</button></div>
+                    spellcheck="false" />
+                <button class="btn-primary" onclick="sendCommand()">Send</button>
+            </div>
+            
+            <div class="terminal-input" style="border-top: 1px dashed rgba(191, 90, 242, 0.3); padding-top: 10px; background: rgba(191, 90, 242, 0.05); display: flex; gap: 8px; align-items: center;">
+                <span style="color: #bf5af2; font-family: var(--mono); font-weight: bold; flex-shrink: 0;">AI#</span>
+                <input id="aiInput" style="flex: 1; border-color: rgba(191, 90, 242, 0.3); min-width: 0;" placeholder="输入自然语言或点击右侧麦克风说话..." onkeydown="if(event.key==='Enter') sendAiCommand()" autocomplete="off" spellcheck="false" />
+                
+                <button id="voiceBtn" class="btn-purple" style="padding: 0; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; transition: all 0.2s;" onclick="toggleVoiceInput()" title="点击开始说话">🎤</button>
+                
+                <input id="aiApiKey" type="password" placeholder="API Key" style="width: 100px; flex-shrink: 0; border-color: rgba(191, 90, 242, 0.3);" title="填入 API Key" />
+                <button class="btn-purple" style="flex-shrink: 0;" onclick="sendAiCommand()">✨ 执行</button>
+            </div>
         </section>
 
         <div class="footer">OS Simulator · 分模块验收展示版 · 保持原有后端 API 兼容</div>
@@ -2638,6 +2691,92 @@
     // ===========================
        
         function sendCommand() { const input = byId('cmdInput'); const cmd = input.value.trim(); if (cmd) { sendDirectCmd(cmd); input.value = ''; } }
+        
+        // ================= AI 自然语言控制模块 =================
+        // 这里默认使用的是兼容 OpenAI 的接口地址，你可以替换为 DeepSeek、通义千问、Kimi 等服务商的 URL 和模型
+       // 修改为 SiliconFlow 的请求地址
+        const AI_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'; 
+
+        // 这是一个完全免费、极速、且聪明的阿里开源模型
+        const AI_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
+
+        async function sendAiCommand() {
+            const inputEl = byId('aiInput');
+            const apiKeyEl = byId('aiApiKey');
+            const text = inputEl.value.trim();
+            const apiKey = apiKeyEl.value.trim();
+
+            if (!text) return appendTerm('[AI] 请输入自然语言指令。', '#e2a9ff');
+            if (!apiKey) return appendTerm('[AI] 请先在右侧输入 API Key。', '#ff9d98');
+
+            appendTerm(`[AI 思考中] 分析意图："${text}" ...`, '#e2a9ff');
+            inputEl.value = ''; // 清空输入框
+
+            // 核心：告诉大模型它应该扮演什么角色，以及系统支持哪些语法
+            const systemPrompt = `
+你是一个底层操作系统的命令翻译引擎。你的任务是将用户的自然语言意图，精准翻译成以下系统支持的命令字符串。
+【严格规则】
+1. 仅输出最终的单行命令，不要有任何解释，不要 Markdown 格式。
+2. 如果意图涉及多个命令且逻辑连贯，请用英文分号 ";" 隔开。如果是用 Vim 编辑文件，翻译为 "vim <文件名>"。
+3. 如果无法理解，输出 "echo 无法识别指令"
+
+【系统命令语法字典】
+- 进程：create <name> <time> <mem> <pri> (默认参数 10 2048 5)、kill <pid>、block <pid> <ticks> <reason>、wakeup <pid>、suspend <pid>、resume <pid>、fork <pid>、wait <pid>、ptree
+- 文件：touch <file>、mkdir <dir>、rm <file/dir>、cat <file>、write <file> <content>、ls、pwd、cd <dir>、chmod <file> <ro/rw>、stat <file>、rename <old> <new>、vim <file>
+- 内存：access <pid> <addr>、translate <pid> <addr>、resize <pid> <delta>、setmem <FIFO|LRU|CLOCK>
+- 设备：io <pid> <devId>、release <pid>
+- IPC：sem_create <name> <init>、P <name> <pid>、V <name>、msg_send <from> <to> <msg>、msg_read <pid>
+`;
+
+            try {
+                const response = await fetch(AI_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: AI_MODEL,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: text }
+                        ],
+                        temperature: 0.1 // 极低的温度保证指令的精准性
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP 错误: ${response.status}`);
+                
+                const data = await response.json();
+                if (data.choices && data.choices.length > 0) {
+                    let translatedCmd = data.choices[0].message.content.trim();
+                    
+                    // ================= 强力格式清洗 =================
+                    // 1. 去除所有 Markdown 代码块标记 (如 ```bash, ```, 以及单反引号 `)
+                    translatedCmd = translatedCmd.replace(/```[a-zA-Z]*\n?/g, '').replace(/[`]/g, '');
+                    // 2. 将所有的换行符强行替换为空格，防止命令断行
+                    translatedCmd = translatedCmd.replace(/\r?\n/g, ' ');
+                    // 3. 将连续的多个空格压缩成一个空格
+                    translatedCmd = translatedCmd.replace(/\s+/g, ' ').trim();
+                    // ===============================================
+                    
+                    appendTerm(`[AI 生成指令] ${translatedCmd}`, '#bf5af2');
+                    
+                    // 支持 AI 返回多条分号隔开的命令
+                    const cmds = translatedCmd.split(';').map(c => c.trim()).filter(Boolean);
+                    for (const cmd of cmds) {
+                        await sendDirectCmd(cmd); 
+                        await sleep(200); // 稍微停顿，防止后端处理太快
+                    }
+                } else {
+                    appendTerm('[AI] 返回格式异常。', '#ff9d98');
+                }
+            } catch (e) {
+                appendTerm(`[AI 请求失败] ${e.message}`, '#ff9d98');
+            }
+        }
+        // =======================================================
+
         byId('cmdInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendCommand(); if (e.key === 'Tab') { e.preventDefault(); completeCommandInput(e.target); } });
 
         function uiCreateProcess() { sendDirectCmd(`create ${q(val('pName') || 'P_New')} ${val('pTime') || '10'} ${val('pMem') || '2048'} ${val('pPri') || '5'}`); }
@@ -3514,6 +3653,92 @@
         initConsoleDock();
         appendTerm('Visual kernel console loaded. Click Boot System or type help. Press Tab for autocomplete.', '#b8b8c0');
         startStatusLoop();
+        // ================= 语音识别与输入模块 =================
+        let recognition = null;
+        let isListening = false;
+
+        function initSpeechRecognition() {
+            // 检查浏览器是否支持 Web Speech API (推荐使用 Chrome / Edge)
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                appendTerm('[系统] 您的浏览器不支持语音识别，推荐使用 Chrome 或 Edge。', '#ff9d98');
+                return false;
+            }
+            
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRec();
+            recognition.lang = 'zh-CN'; // 设置识别语言为中文
+            recognition.interimResults = false; // 是否实时返回中间结果（设为 false 等说完一次性返回）
+            recognition.maxAlternatives = 1;
+
+            // 开始录音的回调
+            recognition.onstart = function() {
+                isListening = true;
+                const btn = document.getElementById('voiceBtn');
+                btn.innerHTML = '🔴'; // 图标变成红点
+                btn.style.boxShadow = '0 0 12px #ff453a'; // 加上红光呼吸特效
+                btn.style.background = 'rgba(255, 69, 58, 0.2)';
+                appendTerm('[语音] 正在聆听，请对麦克风下达指令...', '#e2a9ff');
+            };
+
+            // 识别成功的回调
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                appendTerm(`[语音捕获] "${transcript}"`, '#9bd2ff');
+                
+                // 将听到的文字填入输入框
+                document.getElementById('aiInput').value = transcript;
+                
+                // ================= 【新增】播放收到语音的确认音效 =================
+                // 这里用了一个开源的充满科技感的电脑提示音，你也可以换成自己本地的文件，比如 './ding.mp3'
+                const audio = new Audio('./sd.m4a');
+                audio.volume = 1; // 设置音量为 60%，避免太大声吓到人
+                audio.play().catch(e => console.log('音效播放失败，可能被浏览器拦截:', e));
+                // ===============================================================
+
+                // 【核心联动】听完自动触发 AI 指令发送！
+                sendAiCommand(); 
+            };
+
+            // 发生错误的回调
+            recognition.onerror = function(event) {
+                if(event.error !== 'no-speech') {
+                    appendTerm(`[语音报错] 识别失败: ${event.error}`, '#ff9d98');
+                }
+                resetVoiceBtn();
+            };
+
+            // 录音结束的回调
+            recognition.onend = function() {
+                resetVoiceBtn();
+            };
+            
+            return true;
+        }
+
+        // 恢复麦克风按钮的 UI 状态
+        function resetVoiceBtn() {
+            isListening = false;
+            const btn = document.getElementById('voiceBtn');
+            btn.innerHTML = '🎤';
+            btn.style.boxShadow = 'none';
+            btn.style.background = 'var(--purple-soft)';
+        }
+
+        // 按钮点击事件处理
+        function toggleVoiceInput() {
+            if (!recognition) {
+                if (!initSpeechRecognition()) return;
+            }
+            if (isListening) {
+                recognition.stop(); // 如果正在听，点击就手动停止
+            } else {
+                try {
+                    recognition.start(); // 开启麦克风
+                } catch (e) {
+                    appendTerm('[系统] 麦克风启动频繁，请稍后再试。', '#ff9d98');
+                }
+            }
+        }
     </script>
 </body>
 
