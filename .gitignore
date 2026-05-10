@@ -2,3 +2,60 @@
 *.exe
 test_fs
 shell
+# #############################################################################
+# C/C++ 编译生成的文件（自动全部忽略）
+# #############################################################################
+
+# 可执行文件（Linux/macOS 无后缀）
+*
+!*/
+!*.c
+!*.cpp
+!*.h
+!*.hpp
+!*.cc
+!*.hh
+!*.py
+!*.sh
+!*.md
+!*.html
+!*.css
+!*.js
+!*.json
+!*.gitignore
+!*.png
+!Makefile
+!CMakeLists.txt
+
+# 如果你想明确排除常见编译产物，也可以用下面这些
+*.o
+*.out
+*.a
+*.so
+*.so.*
+*.d
+*.elf
+*.bin
+*.hex
+*.exe
+*.dll
+*.dylib
+
+# 编译输出目录
+build/
+bin/
+obj/
+output/
+cmake-build-*/
+Release/
+Debug/
+
+# 临时/日志文件
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode/
+.idea/
