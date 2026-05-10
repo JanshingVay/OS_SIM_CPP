@@ -1,0 +1,5 @@
+# 内存模块配置（与 integrated 主程序同目录放置）
+
+physical_pages=32
+policy=fifo
+# log_file=memory_monitor.log
