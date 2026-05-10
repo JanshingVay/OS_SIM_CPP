@@ -193,55 +193,76 @@ namespace
         return buffer.str();
     }
 
-// ================= 真正的文件压缩引擎 (LZW 算法) =================
-    std::string compress_lzw(const std::string& uncompressed) {
-        if (uncompressed.empty()) return "";
+    // ================= 真正的文件压缩引擎 (LZW 算法) =================
+    std::string compress_lzw(const std::string &uncompressed)
+    {
+        if (uncompressed.empty())
+            return "";
         std::map<std::string, int> dict;
-        for (int i = 0; i < 256; i++) dict[std::string(1, static_cast<char>(i))] = i;
-        
+        for (int i = 0; i < 256; i++)
+            dict[std::string(1, static_cast<char>(i))] = i;
+
         std::string w;
         std::vector<int> compressed;
-        for (char c : uncompressed) {
+        for (char c : uncompressed)
+        {
             std::string wc = w + c;
-            if (dict.count(wc)) {
+            if (dict.count(wc))
+            {
                 w = wc;
-            } else {
+            }
+            else
+            {
                 compressed.push_back(dict[w]);
                 dict[wc] = dict.size();
                 w = std::string(1, c);
             }
         }
-        if (!w.empty()) compressed.push_back(dict[w]);
-        
+        if (!w.empty())
+            compressed.push_back(dict[w]);
+
         // 序列化为逗号分隔的数字，防止特殊二进制字符破坏前端 JSON 传输
         std::string out;
-        for (int code : compressed) out += std::to_string(code) + ",";
+        for (int code : compressed)
+            out += std::to_string(code) + ",";
         return out;
     }
 
-    std::string decompress_lzw(const std::string& compressed_str) {
-        if (compressed_str.empty()) return "";
+    std::string decompress_lzw(const std::string &compressed_str)
+    {
+        if (compressed_str.empty())
+            return "";
         std::vector<int> compressed;
         std::stringstream ss(compressed_str);
         std::string token;
-        while (std::getline(ss, token, ',')) {
-            if(!token.empty()) compressed.push_back(std::stoi(token));
+        while (std::getline(ss, token, ','))
+        {
+            if (!token.empty())
+                compressed.push_back(std::stoi(token));
         }
-        if (compressed.empty()) return "";
+        if (compressed.empty())
+            return "";
 
         std::map<int, std::string> dict;
-        for (int i = 0; i < 256; i++) dict[i] = std::string(1, static_cast<char>(i));
-        
+        for (int i = 0; i < 256; i++)
+            dict[i] = std::string(1, static_cast<char>(i));
+
         std::string w(1, static_cast<char>(compressed[0]));
         std::string result = w;
-        for (size_t i = 1; i < compressed.size(); i++) {
+        for (size_t i = 1; i < compressed.size(); i++)
+        {
             int k = compressed[i];
             std::string entry;
-            if (dict.count(k)) {
+            if (dict.count(k))
+            {
                 entry = dict[k];
-            } else if (k == dict.size()) {
+            }
+            else if (k == dict.size())
+            {
                 entry = w + w[0];
-            } else {
+            }
+            else
+            {
                 return ""; // 数据损坏
             }
             result += entry;
@@ -252,48 +273,58 @@ namespace
     }
     // ==================================================================
 
-// ================= 管道解析器 =================
+    // ================= 管道解析器 =================
     // 智能切分带有管道符的命令，但会忽略引号内的 '|'
-    std::vector<std::string> split_pipeline(const std::string& str) {
+    std::vector<std::string> split_pipeline(const std::string &str)
+    {
         std::vector<std::string> commands;
         std::string cur;
         bool in_quote = false;
         char quote_char = '\0';
         bool escaping = false;
 
-        for (char ch : str) {
-            if (escaping) {
+        for (char ch : str)
+        {
+            if (escaping)
+            {
                 cur.push_back(ch);
                 escaping = false;
                 continue;
             }
-            if (ch == '\\') {
+            if (ch == '\\')
+            {
                 escaping = true;
                 cur.push_back(ch);
                 continue;
             }
-            if (in_quote) {
-                if (ch == quote_char) {
+            if (in_quote)
+            {
+                if (ch == quote_char)
+                {
                     in_quote = false;
                     quote_char = '\0';
                 }
                 cur.push_back(ch);
                 continue;
             }
-            if (ch == '\'' || ch == '"') {
+            if (ch == '\'' || ch == '"')
+            {
                 in_quote = true;
                 quote_char = ch;
                 cur.push_back(ch);
                 continue;
             }
-            if (ch == '|') {
-                if (!trim(cur).empty()) commands.push_back(trim(cur));
+            if (ch == '|')
+            {
+                if (!trim(cur).empty())
+                    commands.push_back(trim(cur));
                 cur.clear();
                 continue;
             }
             cur.push_back(ch);
         }
-        if (!trim(cur).empty()) commands.push_back(trim(cur));
+        if (!trim(cur).empty())
+            commands.push_back(trim(cur));
         return commands;
     }
     // ==============================================
@@ -619,9 +650,6 @@ namespace
         return j;
     }
 
-
-
-    
     std::string help_text()
     {
         return R"HELP(可用命令：
@@ -699,8 +727,10 @@ namespace
         // --- [新增] echo 命令，常用于管道头部 ---
         else if (action == "echo")
         {
-            if (args.size() >= 2) out << join_tokens(args, 1);
-            else out << piped_input;
+            if (args.size() >= 2)
+                out << join_tokens(args, 1);
+            else
+                out << piped_input;
         }
 
         // 1. 进程管理。
@@ -853,10 +883,13 @@ namespace
         // --- 修改：支持管道的 cat ---
         else if (action == "cat")
         {
-            if (args.size() >= 2) {
+            if (args.size() >= 2)
+            {
                 // 读取文件并去掉了干扰管道的 "文件内容:\n" 提示
-                out << fs.read_file(args[1]); 
-            } else {
+                out << fs.read_file(args[1]);
+            }
+            else
+            {
                 out << piped_input;
             }
         }
@@ -974,22 +1007,32 @@ namespace
                 }
             }
         }
- // --- 修改：支持管道的 grep ---
+        // --- 修改：支持管道的 grep ---
         else if (action == "grep" && args.size() >= 2)
         {
             std::string pattern = args[1];
             std::string content = "";
-            
+
             // 如果提供了第三个参数，则去文件里搜；否则从管道输入里搜
-            if (args.size() >= 3) {
+            if (args.size() >= 3)
+            {
                 content = fs.read_file(args[2]);
-                if (content.empty()) { out << "grep: 文件为空或不存在"; return out.str(); }
-            } else if (!piped_input.empty()) {
-                content = piped_input;
-            } else {
-                out << "grep: 缺少文件参数，且没有管道输入"; return out.str();
+                if (content.empty())
+                {
+                    out << "grep: 文件为空或不存在";
+                    return out.str();
+                }
             }
-            
+            else if (!piped_input.empty())
+            {
+                content = piped_input;
+            }
+            else
+            {
+                out << "grep: 缺少文件参数，且没有管道输入";
+                return out.str();
+            }
+
             std::istringstream iss(content);
             std::string line;
             int line_num = 1;
@@ -999,8 +1042,10 @@ namespace
                 if (line.find(pattern) != std::string::npos)
                 {
                     // 从文件读打印行号；从管道读不打印行号
-                    if (args.size() >= 3) out << line_num << ": " << line << "\n";
-                    else out << line << "\n";
+                    if (args.size() >= 3)
+                        out << line_num << ": " << line << "\n";
+                    else
+                        out << line << "\n";
                     found = true;
                 }
                 line_num++;
@@ -1008,62 +1053,80 @@ namespace
             if (!found)
                 out << "grep: 未找到匹配项 '" << pattern << "'";
         }
-else if (action == "tar" && args.size() >= 3) {
-            std::string mode = args[1]; 
+        else if (action == "tar" && args.size() >= 3)
+        {
+            std::string mode = args[1];
             std::string archive = args[2];
-            if (mode == "-c" && args.size() >= 4) {
+            if (mode == "-c" && args.size() >= 4)
+            {
                 std::string tar_content = "";
-                for (size_t i = 3; i < args.size(); ++i) {
+                for (size_t i = 3; i < args.size(); ++i)
+                {
                     iNode inode;
-                    if (fs.get_file_info(args[i], inode) && inode.i_mode == 1) {
+                    if (fs.get_file_info(args[i], inode) && inode.i_mode == 1)
+                    {
                         std::string c = fs.read_file(args[i]);
                         tar_content += args[i] + "\n" + std::to_string(c.size()) + "\n" + c + "\n";
                     }
                 }
-                
+
                 // ★ 真正的压缩在这里执行
                 std::string compressed_data = compress_lzw(tar_content);
-                
-                if (fs.create_file(archive, false) >= 0) {
+
+                if (fs.create_file(archive, false) >= 0)
+                {
                     fs.write_file(archive, compressed_data, 0);
-                    
+
                     // 计算理论上的二进制真实压缩率
                     int original_size = tar_content.empty() ? 1 : tar_content.size();
                     // 数一下压缩数据里有多少个逗号，就知道有多少个有效编码
                     int code_count = std::count(compressed_data.begin(), compressed_data.end(), ',');
                     int real_binary_size = code_count * 2; // 真实环境 LZW 每个编码约占 2 字节
-                    
+
                     int ratio = 100 - (real_binary_size * 100 / original_size);
-                    
-                    if (ratio >= 0) {
+
+                    if (ratio >= 0)
+                    {
                         out << "tar: 成功打包并压缩文件到 " << archive << " (真实体积减少了 " << ratio << "%)，好耶！";
-                    } else {
+                    }
+                    else
+                    {
                         out << "tar: 成功打包到 " << archive << " (体积反向膨胀了 " << -ratio << "%，因为文件实在太小了！)";
                     }
-                } else out << "tar 失败: 无法创建 " << archive;
-                
-            } else if (mode == "-x") {
+                }
+                else
+                    out << "tar 失败: 无法创建,zako~zako~ " << archive;
+            }
+            else if (mode == "-x")
+            {
                 std::string raw_data = fs.read_file(archive);
-                if (raw_data.empty()) out << "tar: 归档文件为空或不存在";
-                else {
+                if (raw_data.empty())
+                    out << "tar: 归档文件为空或不存在";
+                else
+                {
                     // ★ 解压数据恢复原始打包状态
                     std::string c = decompress_lzw(raw_data);
-                    
+
                     std::istringstream iss(c);
                     std::string fname, slen;
-                    while (std::getline(iss, fname) && std::getline(iss, slen)) {
+                    while (std::getline(iss, fname) && std::getline(iss, slen))
+                    {
                         int len = std::stoi(slen);
                         std::string fcontent(len, '\0');
                         iss.read(&fcontent[0], len);
-                        std::string empty; std::getline(iss, empty); 
-                        if (fs.create_file(fname, false) >= 0) {
+                        std::string empty;
+                        std::getline(iss, empty);
+                        if (fs.create_file(fname, false) >= 0)
+                        {
                             fs.write_file(fname, fcontent, 0);
                             out << "解压: " << fname << "\n";
                         }
                     }
                     out << "tar: 解压完毕";
                 }
-            } else {
+            }
+            else
+            {
                 out << "用法: tar -c <包名> <文件1> ... 或 tar -x <包名>";
             }
         }
@@ -1252,6 +1315,23 @@ void start_http_server()
         std::ostringstream ss;
         ss << in.rdbuf();
         res.set_content(ss.str(), "text/html; charset=utf-8"); });
+    // ==============================================================
+    svr.Get(R"(/(.+\.(png|jpg|jpeg|gif|ico)))", [&](const httplib::Request &req, httplib::Response &res)
+            {
+        set_cors(res);
+        std::string filename = req.matches[1].str();
+        std::ifstream in(filename, std::ios::binary);
+        if (in) {
+            std::ostringstream ss;
+            ss << in.rdbuf();
+            // 动态设置正确的图片 MIME 类型
+            std::string ext = filename.substr(filename.find_last_of('.') + 1);
+            res.set_content(ss.str(), "image/" + ext);
+        } else {
+            res.status = 404;
+            res.set_content("Image not found", "text/plain");
+        } });
+    // ==============================================================
 
     svr.Post("/api/boot", [&](const httplib::Request &, httplib::Response &res)
              {
