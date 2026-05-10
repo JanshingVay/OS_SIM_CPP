@@ -34,6 +34,121 @@
             --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
         }
 
+/* ================= 登入界面样式 ================= */
+/* ================= Galgame 风格登入界面 ================= */
+        #startScreen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: url('bg.png') center/cover no-repeat;
+            z-index: 100000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start; /* 菜单靠左对齐，更有 Galgame 感 */
+            padding-left: 10%; /* 左侧留白 */
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+
+        /* Elaina 标题稍微缩小并移动位置 */
+        .title-elaina {
+            font-size: 90px;
+            font-family: 'Brush Script MT', 'Dancing Script', cursive;
+            color: #fff;
+            margin-bottom: 30px;
+            text-shadow: 0 0 15px #b700ff, 0 0 30px #ff00ff;
+            animation: floatText 3s ease-in-out infinite;
+        }
+
+        /* Galgame 菜单容器 */
+        .gal-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Galgame 风格按钮：长条状、半透明、带悬浮位移 */
+        .gal-btn {
+            width: 280px;
+            padding: 12px 30px;
+            font-size: 20px;
+            font-family: "Microsoft YaHei", sans-serif;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.9);
+            background: rgba(0, 0, 0, 0.3); /* 半透明黑 */
+            backdrop-filter: blur(5px); /* 背景模糊 */
+            border: 1px solid rgba(183, 0, 255, 0.5);
+            border-left: 5px solid #b700ff; /* 左侧粗边线 */
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            letter-spacing: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 鼠标悬浮：变色、向右滑动、发光 */
+        .gal-btn:hover {
+            background: rgba(183, 0, 255, 0.4);
+            color: #fff;
+            transform: translateX(20px); /* 向右滑出一段距离 */
+            box-shadow: 0 0 20px rgba(183, 0, 255, 0.6);
+            border-color: #ff00ff;
+        }
+        /* ================= 樱花点击绽放特效 ================= */
+        .sakura-burst {
+            position: fixed;
+            pointer-events: none; /* 绝对不能挡住真正元素的点击 */
+            z-index: 999999;
+            width: 10px;
+            height: 15px;
+            background: #ffb7c5;
+            border-radius: 15px 0px 15px 0px;
+            box-shadow: 0 0 10px rgba(255, 183, 197, 0.8);
+            /* 绽放动画，由 JS 动态传入移动距离(--tx, --ty)和旋转角度(--rot) */
+            animation: sakuraBloom 0.8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+        }
+
+        @keyframes sakuraBloom {
+            0% { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(0.2) rotate(0deg); 
+            }
+            100% { 
+                opacity: 0; 
+                /* 往四面八方炸开，并且旋转飘落 */
+                transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1.2) rotate(var(--rot)); 
+            }
+        }
+        /* ================================================= */
+
+        /* 按钮装饰：悬浮时的小箭头 */
+        .gal-btn::after {
+            content: '▶';
+            position: absolute;
+            right: -20px;
+            transition: right 0.3s;
+            color: #fff;
+        }
+        .gal-btn:hover::after {
+            right: 20px;
+        }
+
+        /* 穿越动画保持不变... */
+        .dive-in {
+            transform: scale(5) !important;
+            filter: blur(20px);
+            opacity: 0 !important;
+            transition: all 1.2s cubic-bezier(0.1, 0.8, 0.2, 1) !important;
+        }
+
+        #whiteFlash {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #fff; opacity: 0; pointer-events: none; z-index: 100001;
+            transition: opacity 0.5s ease-out;
+        }
+        /* ============================================== */
+
         body.dark {
             --bg: #050507;
             --bg-soft: #0d0d12;
@@ -1557,7 +1672,35 @@
 
 <body>
     <div class="noise"></div>
+    <div id="startScreen">
+        <h1 class="title-elaina">Elaina OS Simulator</h1>
+        <div class="gal-menu">
+            <button class="gal-btn" id="startBtn">开始操作</button>
+            <button class="gal-btn" id="cgBtn">OS鉴赏</button>
+            <button class="gal-btn" id="exitBtn">退出系统</button>
+        </div>
+    </div>
 
+
+    //---------------
+<div id="cgModal" class="cg-overlay">
+    <div class="cg-container">
+        <div class="cg-header">
+            <h2>❀ 特殊OSCG ❀</h2>
+            <button class="cg-close" onclick="closeCG()">×</button>
+        </div>
+        <div class="cg-grid">
+            <div class="cg-item" onclick="viewCG('macos.png')"><img src="macos.png" alt="CG 1"></div>
+            <div class="cg-item" onclick="viewCG('arch.png')"><img src="arch.png" alt="CG 1"></div>
+        </div>
+    </div>
+</div>
+
+<div id="cgViewer" class="cg-viewer" onclick="closeViewer()">
+    <img id="cgViewerImg" src="" alt="Full CG">
+</div>
+    //---------------
+    
     <div class="noise"></div>
     
     <style>
@@ -1658,6 +1801,87 @@
             font-size: 12px;
             font-family: var(--mono);
         }
+
+        /* ================= 樱花鼠标拖尾特效 ================= */
+        .sakura-petal {
+            position: fixed;
+            pointer-events: none; /* 关键：确保它不会挡住鼠标的点击 */
+            z-index: 999999; /* 在最顶层 */
+            width: 12px;
+            height: 18px;
+            background: #ffb7c5; /* 樱花粉色 */
+            /* 用 CSS 画出一个花瓣的形状 */
+            border-radius: 15px 0px 15px 0px; 
+            box-shadow: 0 0 10px rgba(255, 183, 197, 0.8);
+            /* 使用 fall 动画，持续 1.2 秒 */
+            animation: sakuraFall 1.2s ease-out forwards;
+        }
+
+        /* 花瓣飘落、旋转、渐隐的动画 */
+        @keyframes sakuraFall {
+            0% { 
+                opacity: 0.8; 
+                transform: scale(1) rotate(0deg); 
+            }
+            100% { 
+                opacity: 0; 
+                /* 往下掉、往右飘，并且旋转 */
+                transform: translateY(80px) translateX(40px) rotate(360deg) scale(0.3); 
+            }
+        }
+        /* ================================================= */
+
+        /* ================= CG 鉴赏（相册）样式 ================= */
+        .cg-overlay {
+            position: fixed; inset: 0; z-index: 100005; /* 层级在开始界面之上 */
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .cg-overlay.active { display: flex; animation: fadeIn 0.3s ease; }
+        
+        .cg-container {
+            width: 80vw; height: 80vh; max-width: 1000px;
+            background: rgba(20, 10, 30, 0.7); border: 2px solid #b700ff;
+            border-radius: 15px; box-shadow: 0 0 40px rgba(183, 0, 255, 0.6);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        
+        .cg-header {
+            padding: 15px 25px; background: rgba(0, 0, 0, 0.6); border-bottom: 1px solid #b700ff;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .cg-header h2 { 
+            margin: 0; font-family: "Microsoft YaHei", sans-serif; 
+            color: #ff00ff; text-shadow: 0 0 10px #ff00ff; font-weight: normal; letter-spacing: 2px;
+        }
+        .cg-close {
+            background: transparent; border: none; color: #fff; font-size: 32px; 
+            cursor: pointer; transition: all 0.3s;
+        }
+        .cg-close:hover { color: #00f0ff; transform: scale(1.2) rotate(90deg); text-shadow: 0 0 10px #00f0ff; }
+        
+        .cg-grid {
+            flex: 1; padding: 25px; overflow-y: auto;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px;
+        }
+        
+        /* 缩略图卡片 */
+        .cg-item {
+            height: 140px; background: #000; border: 2px solid transparent; 
+            border-radius: 8px; overflow: hidden; cursor: pointer; transition: all 0.3s ease;
+        }
+        .cg-item img { width: 100%; height: 100%; object-fit: cover; opacity: 0.7; transition: 0.3s; }
+        .cg-item:hover { border-color: #00f0ff; transform: scale(1.05) translateY(-5px); box-shadow: 0 10px 20px rgba(0, 240, 255, 0.4); }
+        .cg-item:hover img { opacity: 1; }
+
+        /* 全屏大图查看器 */
+        .cg-viewer {
+            position: fixed; inset: 0; z-index: 100010; background: rgba(0,0,0,0.95);
+            display: none; align-items: center; justify-content: center; cursor: zoom-out;
+        }
+        .cg-viewer.active { display: flex; animation: fadeIn 0.3s; }
+        .cg-viewer img { max-width: 90vw; max-height: 90vh; border-radius: 10px; box-shadow: 0 0 50px #b700ff; }
+        /* ====================================================== */
     </style>
     
     <div id="vimModal" class="vim-overlay">
@@ -3514,6 +3738,144 @@
         initConsoleDock();
         appendTerm('Visual kernel console loaded. Click Boot System or type help. Press Tab for autocomplete.', '#b8b8c0');
         startStatusLoop();
+
+
+        // 
+   // ===== Galgame 菜单控制逻辑 =====
+
+    // 1. 开始：触发穿越动画并进入系统
+    document.getElementById('startBtn').addEventListener('click', function () {
+        const screen = document.getElementById('startScreen');
+
+        // 播放穿越特效
+        let flash = document.createElement('div');
+        flash.id = 'whiteFlash';
+        document.body.appendChild(flash);
+
+        setTimeout(() => { flash.style.opacity = '1'; }, 50);
+        screen.classList.add('dive-in');
+
+        setTimeout(() => {
+            screen.style.display = 'none';
+            flash.style.opacity = '0';
+            setTimeout(() => flash.remove(), 800);
+        }, 1000);
+    });
+
+    // 2. CG 鉴赏：可以弹出一个提示或者打开你的相册模块
+    document.getElementById('cgBtn').addEventListener('click', function () {
+        document.getElementById('cgModal').classList.add('active');
+    });
+
+    // 3. 退出：关闭网页或模拟关机
+    document.getElementById('exitBtn').addEventListener('click', function () {
+        if (confirm("确定要关闭系统吗？")) {
+            window.opener = null;
+            window.open('', '_self');
+            window.close(); // 尝试关闭当前窗口
+            // 如果是在某些浏览器无法关闭，则模拟黑屏
+            document.body.style.background = "#000";
+            document.body.innerHTML = "<h1 style='color:#fff; text-align:center; margin-top:20%'>Power Off...</h1>";
+        }
+    });
+    // =====================================// =====================================
+    // ===== CG 鉴赏专属控制函数 =====
+        function closeCG() {
+            document.getElementById('cgModal').classList.remove('active');
+        }
+
+        function viewCG(imageSrc) {
+            // 把点击的图片路径赋给大图查看器
+            document.getElementById('cgViewerImg').src = imageSrc;
+            document.getElementById('cgViewer').classList.add('active');
+        }
+
+        function closeViewer() {
+            // 点击任意位置关闭大图
+            document.getElementById('cgViewer').classList.remove('active');
+        }
+    
+        // ===== 樱花鼠标拖尾特效控制 =====
+            let lastMoveTime = 0;
+
+            document.addEventListener('mousemove', function (e) {
+                const now = Date.now();
+                // 限制生成频率（每 30 毫秒最多生成一片），防止生成太多卡顿
+                if (now - lastMoveTime < 30) return;
+                lastMoveTime = now;
+
+                // 随机概率：并不是每次移动都生成，让花瓣显得自然稀疏一点
+                if (Math.random() > 0.6) return;
+
+                // 1. 创建花瓣元素
+                const petal = document.createElement('div');
+                petal.className = 'sakura-petal';
+
+                // 2. 让花瓣出现在鼠标当前的位置 (稍微加一点随机偏移，不那么死板)
+                const offsetX = (Math.random() - 0.5) * 20;
+                const offsetY = (Math.random() - 0.5) * 20;
+                petal.style.left = (e.clientX + offsetX) + 'px';
+                petal.style.top = (e.clientY + offsetY) + 'px';
+
+                // 3. 随机大小和随机初始旋转角度
+                const scale = Math.random() * 0.6 + 0.4; // 0.4 ~ 1.0 的大小
+                const rotation = Math.random() * 360;
+                // 注意：因为 CSS 动画里也有 transform，为了不冲突，我们把初始旋转写在内联样式里
+                // 但更好的做法是改变它的起始方向，这里我们用 filter 随机改变一点点色调
+                petal.style.filter = `hue-rotate(${Math.random() * 20 - 10}deg) brightness(${Math.random() * 0.5 + 0.8})`;
+
+                // 追加缩放
+                petal.style.width = (12 * scale) + 'px';
+                petal.style.height = (18 * scale) + 'px';
+
+                // 4. 把花瓣加到网页里
+                document.body.appendChild(petal);
+
+                // 5. 动画结束后（1.2秒），把这个花瓣从内存中彻底删掉，防止网页变卡
+                setTimeout(() => {
+                    petal.remove();
+                }, 1200);
+            });
+    
+            // ===== 樱花点击绽放特效控制 =====
+                document.addEventListener('click', function (e) {
+                    const numPetals = 6; // 每次点击炸开 6 片樱花
+
+                    for (let i = 0; i < numPetals; i++) {
+                        const burst = document.createElement('div');
+                        burst.className = 'sakura-burst';
+
+                        // 初始位置设置在鼠标点击的正中心
+                        burst.style.left = e.clientX + 'px';
+                        burst.style.top = e.clientY + 'px';
+
+                        // 核心魔法：计算爆炸的随机方向和距离
+                        const angle = Math.random() * Math.PI * 2; // 0 到 360 度的随机弧度
+                        const distance = 40 + Math.random() * 80;  // 炸开的距离 40px ~ 120px
+
+                        // 利用三角函数算出 X 和 Y 轴要移动的距离
+                        const tx = Math.cos(angle) * distance + 'px';
+                        const ty = Math.sin(angle) * distance + 'px';
+
+                        // 随机旋转圈数
+                        const rot = (Math.random() * 720 - 360) + 'deg';
+
+                        // 把这些随机变量通过 CSS 变量传给上面的 keyframes 动画
+                        burst.style.setProperty('--tx', tx);
+                        burst.style.setProperty('--ty', ty);
+                        burst.style.setProperty('--rot', rot);
+
+                        // 随机一点色调和明暗变化，让花瓣有层次感
+                        burst.style.filter = `hue-rotate(${Math.random() * 30 - 15}deg) brightness(${Math.random() * 0.4 + 0.8})`;
+
+                        document.body.appendChild(burst);
+
+                        // 动画结束（0.8秒）后自动销毁，保持系统流畅
+                        setTimeout(() => {
+                            burst.remove();
+                        }, 800);
+                    }
+                });
     </script>
 </body>
 

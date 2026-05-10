@@ -14,3 +14,15 @@ g++ -O2 -std=c++11 test_fs.cpp filesystem.cpp disk.cpp -o run_fs_test -pthread
 
 # 3. 运行测试
 ./run_fs_test
+
+# 4.linux运行
+g++ -O2 -std=c++14 \
+    os_sim_main.cpp \
+    memory/memory.cpp \
+    process/program.cpp \
+    process/device.cpp \
+    process/ipc.cpp \
+    filesystem.cpp \
+    disk.cpp \
+    -o os_simulator \
+    -pthread
