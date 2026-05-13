@@ -687,6 +687,77 @@
             outline: 3px solid rgba(48, 209, 88, .38);
         }
 
+        .mem-frame-off {
+            opacity: 0.42;
+            filter: grayscale(0.35);
+        }
+
+        .mem-block.used.pid-tone {
+            border-color: transparent;
+        }
+
+        /* MMU 观测：TLB 曲线 + 缺页脉冲 */
+        .mmu-viz {
+            border-radius: var(--radius-md);
+            border: 1px solid var(--hairline);
+            padding: 14px 16px;
+            background: rgba(127, 127, 127, .06);
+        }
+
+        .mmu-chart-wrap {
+            margin-top: 10px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        #mmuTimelineCanvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, .04);
+        }
+
+        body.dark #mmuTimelineCanvas {
+            background: rgba(255, 255, 255, .04);
+        }
+
+        .mmu-chart-axis {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+
+        .mmu-axis-r {
+            color: var(--red);
+            font-weight: 700;
+        }
+
+        .mmu-pid-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 14px;
+            align-items: center;
+            font-size: 12px;
+            max-width: min(520px, 100%);
+            justify-content: flex-end;
+        }
+
+        .mmu-leg-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mmu-swatch {
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
+        }
+
         .file-list {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1959,6 +2030,7 @@
                     id="connectionPill"><span class="pulse"></span>Connecting</span></div>
             <div class="nav-links">
                 <a href="#moduleLab">模块验收</a><a href="#schedulerGame">调度小游戏</a><a href="#arcadeGame">Arcade</a><a
+                    href="#swapChallenge">Swap</a><a
                     href="#process">Process</a><a href="#memory">Memory</a><a href="#filesystem">File System</a><a
                     href="#deviceipc">Device & IPC</a><a href="#console">Console</a>
                 <button onclick="toggleConsole()">终端</button><button onclick="toggleTheme()">切换主题</button>
@@ -2350,6 +2422,23 @@
                 </div>
                 <div class="row section"><span class="badge">页面命中 <span id="pageHits">0</span></span><span
                         class="badge">物理页容量 <span id="physicalPages">0</span></span></div>
+                <div class="mmu-viz section">
+                    <div class="row" style="justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;">
+                        <div>
+                            <div class="small">MMU 观测 · 每秒采样（与状态刷新同步）</div>
+                            <div class="value" style="font-size:14px;font-weight:760;" id="mmuFaultPulse">等待状态同步…</div>
+                        </div>
+                        <div id="mmuPidLegend" class="mmu-pid-legend" aria-label="物理帧占用 PID 图例"></div>
+                    </div>
+                    <div class="mmu-chart-wrap">
+                        <canvas id="mmuTimelineCanvas" width="920" height="78" aria-label="TLB 命中率折线与缺页脉冲"></canvas>
+                        <div class="mmu-chart-axis">
+                            <span>折线：TLB 命中%</span>
+                            <span>→ 时间</span>
+                            <span class="mmu-axis-r">柱：本周期新增缺页次数</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="mem-grid section" id="memoryGrid"></div>
             </div>
             <div class="card">
@@ -2373,6 +2462,47 @@
                             id="resizeDelta" type="number" placeholder="deltaBytes，例如 4096 或 -1024" /></div>
                     <div><button class="btn-purple" onclick="resizeProcess()">动态扩缩容</button></div>
                 </div>
+            </div>
+        </section>
+
+        <section id="swapChallenge" class="section grid swap-challenge-layout">
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">
+                    <div>
+                        <h2>置换接力 · Swap Challenge</h2>
+                        <div class="sub">创建一个<strong>逻辑页多于可用物理帧</strong>的进程，按顺序访问虚拟页，迫使内核发生<strong>缺页与页面置换</strong>。可切换 <code>FIFO / LRU / CLOCK</code> 对比累计缺页次数（配合上方 MMU 观测曲线）。逻辑页数约 49、默认 32 帧时会自动换出。</div>
+                    </div>
+                    <span class="badge" id="swapPolicyBadge">--</span>
+                </div>
+                <div class="grid three section" style="gap:14px;">
+                    <div class="surface">
+                        <div class="small">关卡进程 PID</div>
+                        <div class="value" id="swapPidDisplay">--</div>
+                        <div class="small">准备关卡后自动创建 <code>swap_*</code> 进程</div>
+                    </div>
+                    <div class="surface">
+                        <div class="small">本关缺页增量（累计−开局快照）</div>
+                        <div class="value" id="swapFaultDelta">0</div>
+                        <div class="small">与内核 <code>page_faults</code> 对齐</div>
+                    </div>
+                    <div class="surface">
+                        <div class="small">下一拍访问</div>
+                        <div class="value" id="swapNextPage" style="font-size:22px;">--</div>
+                        <div class="small">访问序列循环接力</div>
+                    </div>
+                </div>
+                <div class="swap-seq-preview section" id="swapSeqPreview" style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.5;padding:12px 14px;border-radius:16px;border:1px solid var(--hairline);background:rgba(127,127,127,.06);max-height:96px;overflow:auto;">序列未生成</div>
+                <div class="row section" style="flex-wrap:wrap;gap:10px;">
+                    <button class="btn-primary" onclick="swapPrepareLevel()">准备关卡</button>
+                    <button class="btn-blue" onclick="swapStepOnce()">访问下一页（接力）</button>
+                    <button class="btn-yellow" onclick="swapAutoBurst(12)">连访 12 次</button>
+                    <button onclick="sendDirectCmd('setmem FIFO')">FIFO</button>
+                    <button onclick="sendDirectCmd('setmem LRU')">LRU</button>
+                    <button onclick="sendDirectCmd('setmem CLOCK')">CLOCK</button>
+                    <button onclick="sendDirectCmd('memstat')">memstat</button>
+                    <button class="btn-red" onclick="swapResetGame()">结束并清理关卡进程</button>
+                </div>
+                <div class="small section" style="color:var(--muted);">提示：若物理帧较多仍不见换出，可在 <code>os_memory_config.txt</code> 把 <code>physical_pages</code> 调到 6～8 后再「准备关卡」。准备时会 <code>memreset</code> 清零统计。</div>
             </div>
         </section>
 
@@ -2531,6 +2661,148 @@
         let lastGameRunningPid = null;
         let lastFiles = [];
 
+        const mmuState = {
+            prevFaults: null,
+            maxHist: 96,
+            history: []
+        };
+
+        function pidHue(pid) {
+            const x = Math.abs(Number(pid)) || 0;
+            return (x * 47 + 37) % 360;
+        }
+
+        function renderPidLegend(bitmap) {
+            const el = byId('mmuPidLegend');
+            if (!el) return;
+            const pids = [...new Set((bitmap || []).filter(x => x !== -1 && x !== undefined && x !== null))].sort((a, b) => Number(a) - Number(b));
+            el.innerHTML = pids.length ? pids.map(pid => {
+                const h = pidHue(pid);
+                return `<span class="mmu-leg-item"><span class="mmu-swatch" style="background:hsl(${h},72%,48%)"></span>P${esc(pid)}</span>`;
+            }).join('') : '<span class="small">暂无占用帧</span>';
+        }
+
+        function renderMemoryGridMMU(data) {
+            const bitmap = data.memoryBitmap || [];
+            const physCap = Number(data.activePhysicalPages) || bitmap.length || 32;
+            byId('memoryGrid').innerHTML = bitmap.map((pid, idx) => {
+                const off = idx >= physCap;
+                const used = pid !== -1 && pid !== undefined && pid !== null;
+                const h = used ? pidHue(pid) : 0;
+                const style = used
+                    ? ` style="background:linear-gradient(135deg,hsl(${h},72%,52%),hsl(${h},56%,38%));color:#fff;border-color:transparent;box-shadow:0 6px 16px hsla(${h},65%,36%,.28);"`
+                    : '';
+                const title = used
+                    ? `物理帧 ${idx} · 占用进程 PID ${pid}${off ? '（超额帧）' : ''}`
+                    : `物理帧 ${idx} · 空闲${off ? '（配置未启用）' : ''}`;
+                const lab = used ? ('P' + esc(pid)) : String(idx);
+                return `<div class="mem-block ${used ? 'used pid-tone' : ''} ${off ? 'mem-frame-off' : ''}"${style} title="${esc(title)}">${lab}</div>`;
+            }).join('');
+        }
+
+        function drawMmuTimelineCanvas() {
+            const canvas = byId('mmuTimelineCanvas');
+            if (!canvas || !canvas.getContext) return;
+            const ctx = canvas.getContext('2d');
+            const wrap = canvas.parentElement;
+            const cssW = wrap ? wrap.clientWidth : 920;
+            const dpr = window.devicePixelRatio || 1;
+            const w = Math.max(320, Math.floor(cssW));
+            const h = 78;
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            canvas.width = Math.floor(w * dpr);
+            canvas.height = Math.floor(h * dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, w, h);
+
+            const hist = mmuState.history;
+            const padL = 10, padR = 10, padT = 10, padB = 22;
+            const chartW = w - padL - padR;
+            const chartH = h - padT - padB;
+            const blues = getComputedStyle(document.body).getPropertyValue('--blue').trim() || '#0071e3';
+            const reds = getComputedStyle(document.body).getPropertyValue('--red').trim() || '#ff453a';
+
+            ctx.strokeStyle = 'rgba(127,127,127,0.25)';
+            ctx.lineWidth = 1;
+            for (let g = 0; g <= 4; g++) {
+                const y = padT + (chartH * g) / 4;
+                ctx.beginPath();
+                ctx.moveTo(padL, y);
+                ctx.lineTo(padL + chartW, y);
+                ctx.stroke();
+            }
+
+            if (hist.length < 2) {
+                ctx.fillStyle = 'rgba(127,127,127,0.5)';
+                ctx.font = '12px system-ui,sans-serif';
+                ctx.fillText('采样不足 2 次，曲线将随后显示…', padL, padT + chartH / 2);
+                return;
+            }
+
+            ctx.strokeStyle = blues;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            hist.forEach((s, i) => {
+                const x = padL + (i / (hist.length - 1)) * chartW;
+                const y = padT + chartH * (1 - Math.min(100, Math.max(0, s.tlbPct)) / 100);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            hist.forEach((s, i) => {
+                if (!s.faultDelta) return;
+                const x = padL + (i / Math.max(1, hist.length - 1)) * chartW;
+                const barW = Math.max(3, chartW / hist.length - 2);
+                const bh = Math.min(chartH * 0.55, 6 + Math.min(s.faultDelta, 12) * 5);
+                ctx.fillStyle = reds;
+                ctx.globalAlpha = 0.88;
+                ctx.fillRect(x - barW / 2, padT + chartH - bh, barW, bh);
+                ctx.globalAlpha = 1;
+            });
+
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim() || '#6e6e73';
+            ctx.font = '10px system-ui,sans-serif';
+            ctx.fillText('0%', 2, padT + chartH + 2);
+            ctx.fillText('100%', 2, padT + 6);
+        }
+
+        function updateMmuObservation(data) {
+            const pf = Number(data.page_faults ?? data.memoryStats?.pageFaults ?? 0);
+            const hits = Number(data.tlb_hits ?? data.tlb?.hits ?? 0);
+            const misses = Number(data.tlb_misses ?? data.tlb?.misses ?? 0);
+            const tlbTotal = hits + misses;
+            const tlbPct = tlbTotal ? (100 * hits / tlbTotal) : 0;
+
+            if (mmuState.prevFaults !== null && pf < mmuState.prevFaults) {
+                mmuState.prevFaults = null;
+                mmuState.history = [];
+            }
+
+            let faultDelta = 0;
+            if (mmuState.prevFaults !== null) faultDelta = Math.max(0, pf - mmuState.prevFaults);
+            mmuState.prevFaults = pf;
+
+            mmuState.history.push({
+                t: data.nowTime ?? 0,
+                tlbPct,
+                faultDelta,
+                pf
+            });
+            while (mmuState.history.length > mmuState.maxHist) mmuState.history.shift();
+
+            const pulseEl = byId('mmuFaultPulse');
+            if (pulseEl) {
+                pulseEl.textContent = faultDelta > 0
+                    ? `本周期约 +${faultDelta} 次缺页（累计 ${pf}）`
+                    : `本周期无新增缺页（累计 ${pf}）`;
+            }
+
+            requestAnimationFrame(drawMmuTimelineCanvas);
+        }
+
+        window.addEventListener('resize', () => requestAnimationFrame(drawMmuTimelineCanvas));
+
 
         async function apiFetch(path, options = {}) {
             let lastErr = null;
@@ -2564,7 +2836,11 @@
             if (!pill) return;
             pill.innerHTML = `<span class="pulse" style="background:${ok ? 'var(--green)' : 'var(--red)'}; box-shadow:0 0 0 5px ${ok ? 'var(--green-soft)' : 'var(--red-soft)'}"></span>${esc(text)}`;
         }
-        function toggleTheme() { document.body.classList.toggle('dark'); localStorage.setItem('os_theme', document.body.classList.contains('dark') ? 'dark' : 'light'); }
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            localStorage.setItem('os_theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+            requestAnimationFrame(drawMmuTimelineCanvas);
+        }
         if (localStorage.getItem('os_theme') === 'dark') document.body.classList.add('dark');
 
         async function startBoot() {
@@ -2661,10 +2937,9 @@
             const phys = Array.isArray(data.memoryBitmap) ? data.memoryBitmap.length : (Number(data.activePhysicalPages) || 0);
             setText('physicalPages', phys);
 
-            const activeSet = new Set(Array.isArray(data.activePhysicalPages) ? data.activePhysicalPages : []);
-            byId('memoryGrid').innerHTML = (data.memoryBitmap || []).map((pid, idx) =>
-                `<div class="mem-block ${pid !== -1 ? 'used' : ''} ${activeSet.has(idx) ? 'active' : ''}" title="Frame ${idx}">${pid !== -1 ? 'P' + esc(pid) : idx}</div>`
-            ).join('');
+            updateMmuObservation(data);
+            renderPidLegend(data.memoryBitmap);
+            renderMemoryGridMMU(data);
 
             const rp = data.runningProcess;
             byId('runningBox').innerHTML = rp ?
@@ -2687,6 +2962,7 @@
             renderSemaphores(data.semaphores || []);
             renderMessages(data.messages || []);
             renderArcadeGame(data);
+            updateSwapHud();
         }
 
         function renderReady(list) {
@@ -3422,6 +3698,148 @@
             }
             const trace = byId('gameTraceList');
             if (trace) trace.innerHTML = gameTrace.length ? gameTrace.slice(0, 18).map(x => `<div class="trace-item">${esc(x)}</div>`).join('') : '<div class="trace-item">等待第一个调度切换...</div>';
+        }
+
+        const swapGame = {
+            pid: null,
+            name: '',
+            seq: [],
+            idx: 0,
+            faultsBaseline: null,
+            preparing: false
+        };
+
+        function findPidByNameInStatus(data, name) {
+            if (!data || !name) return null;
+            const buckets = [data.runningProcess, ...(data.readyQueue || []), ...(data.blockQueue || []), ...(data.suspendQueue || [])];
+            for (const p of buckets) {
+                if (p && String(p.name) === String(name)) return p.pid;
+            }
+            return null;
+        }
+
+        function updateSwapHud() {
+            const badge = byId('swapPolicyBadge');
+            if (badge && latestStatus) badge.innerText = latestStatus.replacementPolicy ?? '--';
+
+            if (!swapGame.pid || !latestStatus) {
+                const el = byId('swapFaultDelta');
+                if (el && swapGame.faultsBaseline === null && !swapGame.pid) el.innerText = '0';
+                return;
+            }
+
+            const pf = Number(latestStatus.page_faults ?? latestStatus.memoryStats?.pageFaults ?? 0);
+            const delta = swapGame.faultsBaseline !== null ? Math.max(0, pf - swapGame.faultsBaseline) : 0;
+            setText('swapFaultDelta', String(delta));
+            setText('swapPidDisplay', `P${swapGame.pid} · ${swapGame.name}`);
+
+            if (swapGame.seq.length) {
+                const next = swapGame.seq[swapGame.idx % swapGame.seq.length];
+                const addrNum = Number(next) * 4096;
+                setText('swapNextPage', `逻辑页 ${next} · ${'0x' + addrNum.toString(16)}`);
+            }
+
+            const prevEl = byId('swapSeqPreview');
+            if (prevEl && swapGame.seq.length) {
+                const head = swapGame.seq.slice(0, 48).join(', ');
+                prevEl.textContent = '访问序列（循环，长度 ' + swapGame.seq.length + '）：' + head + (swapGame.seq.length > 48 ? ' …' : '');
+            }
+        }
+
+        async function swapPrepareLevel() {
+            if (swapGame.preparing) return;
+            swapGame.preparing = true;
+            try {
+                if (!latestStatus?.booted) await startBoot();
+                if (swapGame.pid) await sendDirectCmd(`kill ${swapGame.pid}`);
+
+                swapGame.pid = null;
+                swapGame.seq = [];
+                swapGame.idx = 0;
+                swapGame.faultsBaseline = null;
+
+                await sendDirectCmd('memreset');
+                await sendDirectCmd('setmem FIFO');
+
+                swapGame.name = 'swap_' + Date.now().toString().slice(-8);
+                const data = await sendDirectCmd(`create ${swapGame.name} 120 200704 9`);
+                const msg = data?.msg || '';
+                let pid = null;
+                const m = msg.match(/PID:\s*(\d+)/i) || msg.match(/PID\s*[=\s]*(\d+)/i);
+                if (m) pid = Number(m[1]);
+
+                await refreshAll();
+                if (!pid && latestStatus) pid = findPidByNameInStatus(latestStatus, swapGame.name);
+
+                if (!pid) {
+                    appendTerm('[Swap] 未能解析 PID，请在进程列表中手动查找 ' + swapGame.name + '。', '#ff8f87');
+                    swapGame.preparing = false;
+                    return;
+                }
+
+                swapGame.pid = pid;
+
+                const seq = [];
+                for (let i = 0; i <= 48; i++) seq.push(i);
+                for (let r = 0; r < 4; r++) for (let i = 0; i < 24; i++) seq.push(i);
+
+                swapGame.seq = seq;
+                swapGame.idx = 0;
+
+                await refreshAll();
+                swapGame.faultsBaseline = Number(latestStatus.page_faults ?? latestStatus.memoryStats?.pageFaults ?? 0);
+
+                appendTerm(`[Swap] 关卡就绪：${swapGame.name} PID=${pid}，虚拟约 49 页；请用「访问下一页」或「连访」触发缺页与置换。`, '#9df7a3');
+                const navEl = document.getElementById('swapChallenge');
+                if (navEl) navEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (e) {
+                appendTerm('[Swap] 准备失败：' + (e && e.message ? e.message : e), '#ff8f87');
+            } finally {
+                swapGame.preparing = false;
+            }
+        }
+
+        async function swapStepOnce() {
+            if (!swapGame.pid || !swapGame.seq.length) {
+                appendTerm('[Swap] 请先点击「准备关卡」。', '#ffd08a');
+                return;
+            }
+            const pg = swapGame.seq[swapGame.idx % swapGame.seq.length];
+            swapGame.idx++;
+            const addrHex = '0x' + (Number(pg) * 4096).toString(16);
+            appendTerm(`[Swap] access ${swapGame.pid} ${addrHex}`, '#fff');
+            await sendDirectCmd(`access ${swapGame.pid} ${addrHex}`);
+        }
+
+        async function swapAutoBurst(n) {
+            if (!swapGame.pid || !swapGame.seq.length) {
+                appendTerm('[Swap] 请先点击「准备关卡」。', '#ffd08a');
+                return;
+            }
+            const k = Math.min(Math.max(1, Number(n) || 12), 64);
+            appendTerm(`[Swap] 自动连访 ${k} 次…`, '#e2a9ff');
+            for (let i = 0; i < k; i++) {
+                await swapStepOnce();
+                await sleep(160);
+            }
+        }
+
+        async function swapResetGame() {
+            try {
+                if (swapGame.pid) await sendDirectCmd(`kill ${swapGame.pid}`);
+            } catch (_) {}
+            swapGame.pid = null;
+            swapGame.name = '';
+            swapGame.seq = [];
+            swapGame.idx = 0;
+            swapGame.faultsBaseline = null;
+            setText('swapPidDisplay', '--');
+            setText('swapFaultDelta', '0');
+            setText('swapNextPage', '--');
+            const prevEl = byId('swapSeqPreview');
+            if (prevEl) prevEl.textContent = '序列未生成';
+            await refreshAll();
+            appendTerm('[Swap] 已清理关卡进程（若存在）。', '#ffd08a');
         }
 
 

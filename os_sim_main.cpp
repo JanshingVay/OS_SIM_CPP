@@ -45,6 +45,21 @@ namespace
         res.set_header("Access-Control-Allow-Headers", "Content-Type");
     }
 
+    void serve_html_file(httplib::Response &res, const std::string &filename)
+    {
+        set_cors(res);
+        std::ifstream in(filename, std::ios::binary);
+        if (!in)
+        {
+            res.status = 404;
+            res.set_content(filename + " not found", "text/plain; charset=utf-8");
+            return;
+        }
+        std::ostringstream ss;
+        ss << in.rdbuf();
+        res.set_content(ss.str(), "text/html; charset=utf-8");
+    }
+
     std::string trim(const std::string &s)
     {
         size_t b = 0, e = s.size();
@@ -1108,17 +1123,13 @@ void start_http_server()
                 { set_cors(res); });
 
     svr.Get("/", [&](const httplib::Request &, httplib::Response &res)
-            {
-        set_cors(res);
-        std::ifstream in("index.html", std::ios::binary);
-        if (!in) {
-            res.status = 404;
-            res.set_content("index.html not found", "text/plain; charset=utf-8");
-            return;
-        }
-        std::ostringstream ss;
-        ss << in.rdbuf();
-        res.set_content(ss.str(), "text/html; charset=utf-8"); });
+            { serve_html_file(res, "vimplus.html"); });
+
+    svr.Get("/index.html", [&](const httplib::Request &, httplib::Response &res)
+            { serve_html_file(res, "index.html"); });
+
+    svr.Get("/vimplus.html", [&](const httplib::Request &, httplib::Response &res)
+            { serve_html_file(res, "vimplus.html"); });
 
     svr.Post("/api/boot", [&](const httplib::Request &, httplib::Response &res)
              {
