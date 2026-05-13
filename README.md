@@ -1,4 +1,4 @@
-# OS_SIM_CPP 操作系统课程设计
+﻿# OS_SIM_CPP 操作系统课程设计
 
 OS_SIM_CPP 是一个用 C++ 实现的操作系统原型模拟器，面向操作系统课程设计验收。项目通过 Web 前端、HTTP API 和命令解释器，把进程管理、内存管理、文件系统、磁盘持久化、设备管理和 IPC 组合成一个可演示的小型 OS 模拟环境。
 
@@ -156,15 +156,99 @@ msg_read 3
 
 ## 测试
 
+### 分模块测试（每人负责模块独立验证）
+
+进程管理测试（徐舸山）：
+
+```bash
+g++ -O2 -std=c++14 -D_DEFAULT_SOURCE ^
+    test_process.cpp memory/memory.cpp process/program.cpp ^
+    process/device.cpp process/ipc.cpp filesystem.cpp disk.cpp ^
+    -o run_process_test -pthread
+./run_process_test
+```
+
+内存管理测试（崔敬哲）：
+
+```bash
+g++ -O2 -std=c++14 -D_DEFAULT_SOURCE ^
+    test_memory.cpp memory/memory.cpp disk.cpp ^
+    -o run_memory_test -pthread
+./run_memory_test
+```
+
+文件系统测试（侯博文）：
+
+```bash
+g++ -O2 -std=c++11 test_fs.cpp filesystem.cpp disk.cpp -o run_fs_test -pthread
+./run_fs_test
+```
+
+磁盘测试（韦建兴）：
+
+```bash
+g++ -O2 -std=c++11 disk.cpp memory/memory.cpp test_disk_memory.cpp ^
+    -o run_disk_test -pthread
+./run_disk_test
+```
+
+设备管理测试（杨皓哲）：
+
+```bash
+g++ -O2 -std=c++14 -D_DEFAULT_SOURCE ^
+    test_device.cpp memory/memory.cpp process/program.cpp ^
+    process/device.cpp filesystem.cpp disk.cpp ^
+    -o run_device_test -pthread
+./run_device_test
+```
+
+IPC 测试（杨皓哲）：
+
+```bash
+g++ -O2 -std=c++14 -D_DEFAULT_SOURCE ^
+    test_ipc.cpp memory/memory.cpp process/program.cpp ^
+    process/ipc.cpp filesystem.cpp disk.cpp ^
+    -o run_ipc_test -pthread
+./run_ipc_test
+```
+
+### 全面集成测试 (推荐用于验收)
+
+覆盖进程管理、内存管理、文件系统、磁盘、设备管理和 IPC 的所有模块：
+
+```bash
+g++ -O2 -std=c++14 -D_DEFAULT_SOURCE ^
+    test_comprehensive.cpp ^
+    memory/memory.cpp ^
+    process/program.cpp ^
+    process/device.cpp ^
+    process/ipc.cpp ^
+    filesystem.cpp ^
+    disk.cpp ^
+    -o run_comprehensive_test ^
+    -pthread
+./run_comprehensive_test
+```
+
+### 专项测试
+
+文件系统测试：
+
 ```bash
 ./run_fs_test
 ./os_sim_test_disk_memory
 ```
 
+### HTTP 接口测试
+
 压力测试需要先启动主程序：
 
 ```bash
-python3 test_os_pressure.py
+# 功能验证模式（逐项测试 API）
+python3 test_os_pressure.py --mode func
+
+# 并发压力模式
+python3 test_os_pressure.py --mode stress
 ```
 
 ## 课程验收文档
@@ -178,3 +262,5 @@ python3 test_os_pressure.py
 ## 小组分工
 
 本项目由五名成员协作完成，贡献率平均分配，每人 20%。具体分工见 `docs/小组分工与贡献率.md`。
+
+
