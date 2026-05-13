@@ -166,6 +166,7 @@ bool DiskManager::read_inode(int inode_id, iNode& out_inode) {
     if (!_read_raw_block(block_id, buffer)) return false;
     
     std::memcpy(&out_inode, buffer + offset, sizeof(iNode));
+    out_inode.normalize();
     return true;
 }
 
@@ -201,8 +202,192 @@ bool DiskManager::write_data_block(int block_id, const char* buffer) {
 void DiskManager::sync_disk() {
     std::lock_guard<std::mutex> lock(disk_mutex);
     if (disk_stream.is_open()) {
-        disk_stream.flush(); // 强制刷出 C++ 缓冲区
-        disk_stream.close(); // 关闭句柄，强制 OS 内核落盘
+        disk_stream.flush();
+        disk_stream.close();
         std::cout << "[硬件层] 虚拟磁盘数据已安全同步 (fsync) 并卸载。" << std::endl;
+    }
+}
+
+int DiskManager::_alloc_indirect_data_block(int indirect_block_id, int index) {
+    if (index < 0 || index >= PTRS_PER_BLOCK) return -1;
+
+    char buf[BLOCK_SIZE];
+    if (!read_data_block(indirect_block_id, buf)) return -1;
+
+    int* ptrs = reinterpret_cast<int*>(buf);
+    if (ptrs[index] != -1) return ptrs[index];
+
+    int new_block = allocate_block();
+    if (new_block == -1) return -1;
+
+    ptrs[index] = new_block;
+    if (!write_data_block(indirect_block_id, buf)) {
+        free_block(new_block);
+        return -1;
+    }
+    return new_block;
+}
+
+void DiskManager::_free_single_indirect_chain(int indirect_block_id) {
+    if (indirect_block_id < DATA_BLOCK_START || indirect_block_id >= TOTAL_BLOCKS) return;
+
+    char buf[BLOCK_SIZE];
+    if (!read_data_block(indirect_block_id, buf)) return;
+
+    int* ptrs = reinterpret_cast<int*>(buf);
+    for (int i = 0; i < PTRS_PER_BLOCK; ++i) {
+        if (ptrs[i] != -1) {
+            free_block(ptrs[i]);
+            ptrs[i] = -1;
+        }
+    }
+    free_block(indirect_block_id);
+}
+
+void DiskManager::_free_double_indirect_chain(int indirect_block_id) {
+    if (indirect_block_id < DATA_BLOCK_START || indirect_block_id >= TOTAL_BLOCKS) return;
+
+    char buf[BLOCK_SIZE];
+    if (!read_data_block(indirect_block_id, buf)) return;
+
+    int* ptrs = reinterpret_cast<int*>(buf);
+    for (int i = 0; i < PTRS_PER_BLOCK; ++i) {
+        if (ptrs[i] != -1) {
+            _free_single_indirect_chain(ptrs[i]);
+            ptrs[i] = -1;
+        }
+    }
+    free_block(indirect_block_id);
+}
+
+int DiskManager::get_nth_block(const iNode& node, int n) {
+    if (n < 0) return -1;
+
+    if (n < 10) {
+        return node.direct_blocks[n];
+    }
+
+    n -= 10;
+
+    if (n < PTRS_PER_BLOCK) {
+        if (node.single_indirect == -1) return -1;
+        char buf[BLOCK_SIZE];
+        if (!read_data_block(node.single_indirect, buf)) return -1;
+        int* ptrs = reinterpret_cast<int*>(buf);
+        return ptrs[n];
+    }
+
+    n -= PTRS_PER_BLOCK;
+
+    if (n < PTRS_PER_BLOCK * PTRS_PER_BLOCK) {
+        if (node.double_indirect == -1) return -1;
+        int first = n / PTRS_PER_BLOCK;
+        int second = n % PTRS_PER_BLOCK;
+
+        char buf1[BLOCK_SIZE];
+        if (!read_data_block(node.double_indirect, buf1)) return -1;
+        int* first_ptrs = reinterpret_cast<int*>(buf1);
+
+        if (first_ptrs[first] == -1) return -1;
+
+        char buf2[BLOCK_SIZE];
+        if (!read_data_block(first_ptrs[first], buf2)) return -1;
+        int* second_ptrs = reinterpret_cast<int*>(buf2);
+        return second_ptrs[second];
+    }
+
+    return -1;
+}
+
+int DiskManager::allocate_nth_block(iNode& node, int n) {
+    if (n < 0) return -1;
+
+    if (n < 10) {
+        if (node.direct_blocks[n] == -1) {
+            int new_block = allocate_block();
+            if (new_block == -1) return -1;
+            node.direct_blocks[n] = new_block;
+        }
+        return node.direct_blocks[n];
+    }
+
+    n -= 10;
+
+    if (n < PTRS_PER_BLOCK) {
+        if (node.single_indirect == -1) {
+            int indirect_block = allocate_block();
+            if (indirect_block == -1) return -1;
+            node.single_indirect = indirect_block;
+
+            char empty[BLOCK_SIZE];
+            memset(empty, -1, BLOCK_SIZE);
+            write_data_block(indirect_block, empty);
+        }
+        return _alloc_indirect_data_block(node.single_indirect, n);
+    }
+
+    n -= PTRS_PER_BLOCK;
+
+    if (n < PTRS_PER_BLOCK * PTRS_PER_BLOCK) {
+        if (node.double_indirect == -1) {
+            int dbl_block = allocate_block();
+            if (dbl_block == -1) return -1;
+            node.double_indirect = dbl_block;
+
+            char empty[BLOCK_SIZE];
+            memset(empty, -1, BLOCK_SIZE);
+            write_data_block(dbl_block, empty);
+        }
+
+        int first = n / PTRS_PER_BLOCK;
+        int second = n % PTRS_PER_BLOCK;
+
+        // 确保一级间接块存在
+        char dbl_buf[BLOCK_SIZE];
+        if (!read_data_block(node.double_indirect, dbl_buf)) return -1;
+        int* first_ptrs = reinterpret_cast<int*>(dbl_buf);
+
+        if (first_ptrs[first] == -1) {
+            // 分配新的一级间接块
+            int new_first_level = allocate_block();
+            if (new_first_level == -1) return -1;
+
+            char empty[BLOCK_SIZE];
+            memset(empty, -1, BLOCK_SIZE);
+            if (!write_data_block(new_first_level, empty)) {
+                free_block(new_first_level);
+                return -1;
+            }
+
+            first_ptrs[first] = new_first_level;
+            if (!write_data_block(node.double_indirect, dbl_buf)) {
+                free_block(new_first_level);
+                first_ptrs[first] = -1;
+                return -1;
+            }
+        }
+
+        return _alloc_indirect_data_block(first_ptrs[first], second);
+    }
+
+    return -1;
+}
+
+void DiskManager::free_all_data_blocks(iNode& node) {
+    for (int i = 0; i < 10; ++i) {
+        if (node.direct_blocks[i] != -1) {
+            free_block(node.direct_blocks[i]);
+            node.direct_blocks[i] = -1;
+        }
+    }
+
+    if (node.single_indirect != -1) {
+        _free_single_indirect_chain(node.single_indirect);
+        node.single_indirect = -1;
+    }
+
+    if (node.double_indirect != -1) {
+        _free_double_indirect_chain(node.double_indirect);
+        node.double_indirect = -1;
     }
 }

@@ -21,7 +21,8 @@ void safe_cleanup() {
     fs.cd(".."); 
     fs.cd("..");
 
-    string test_files[] = {"hello.txt", "os_core.txt", "large_data.bin", "test_dir2"};
+    string test_files[] = {"hello.txt", "os_core.txt", "large_data.bin", "test_dir2",
+                           "single_indirect_test.bin", "double_indirect_test.bin"};
     
     for (const auto& fname : test_files) {
         iNode tmp;
@@ -99,7 +100,62 @@ int main() {
     fs.get_file_info("large_data.bin", check_inode);
     run_test("验证底层 iNode size 更新正确", check_inode.i_size == 5);
 
-    cout << "\n--- 阶段 5: 测试结束，安全清理中间产物 ---" << endl;
+    cout << "\n--- 阶段 5: 一级间接索引测试 (Single Indirect) ---" << endl;
+    run_test("创建单间接测试文件", fs.create_file("single_indirect_test.bin", false) != -1);
+    
+    // 10个直接块 = 10KB, 超过后使用一级间接
+    // 写入 15KB (15个块)，触发一级间接索引
+    string single_indirect_data(15 * 1024, 'S');
+    for (int i = 0; i < 15 * 1024; ++i) {
+        single_indirect_data[i] = 'S' + (i % 26);
+    }
+    run_test("写入 15KB 数据 (触发一级间接)", 
+             fs.write_file("single_indirect_test.bin", single_indirect_data) == 15 * 1024);
+    
+    string read_single = fs.read_file("single_indirect_test.bin");
+    run_test("读取 15KB 数据完整性", read_single == single_indirect_data);
+    
+    // 验证 inode 结构
+    iNode single_inode;
+    fs.get_file_info("single_indirect_test.bin", single_inode);
+    run_test("验证单间接 inode 结构", 
+             single_inode.single_indirect != -1 && single_inode.double_indirect == -1);
+    cout << "  [ℹ] 单间接块号: " << single_inode.single_indirect << endl;
+
+    cout << "\n--- 阶段 6: 二级间接索引测试 (Double Indirect) ---" << endl;
+    run_test("创建双间接测试文件", fs.create_file("double_indirect_test.bin", false) != -1);
+    
+    // 10个直接 + 256个一级间接 = 266KB, 超过后使用二级间接
+    // 写入 300KB，触发二级间接索引
+    const int DOUBLE_TEST_SIZE = 300 * 1024;
+    string double_indirect_data(DOUBLE_TEST_SIZE, 'D');
+    for (int i = 0; i < DOUBLE_TEST_SIZE; ++i) {
+        double_indirect_data[i] = 'D' + (i % 26);
+    }
+    run_test("写入 300KB 数据 (触发二级间接)", 
+             fs.write_file("double_indirect_test.bin", double_indirect_data) == DOUBLE_TEST_SIZE);
+    
+    string read_double = fs.read_file("double_indirect_test.bin");
+    run_test("读取 300KB 数据完整性", read_double == double_indirect_data);
+    
+    // 验证 inode 结构
+    iNode double_inode;
+    fs.get_file_info("double_indirect_test.bin", double_inode);
+    run_test("验证双间接 inode 结构", 
+             double_inode.single_indirect != -1 && double_inode.double_indirect != -1);
+    cout << "  [ℹ] 单间接块号: " << double_inode.single_indirect << endl;
+    cout << "  [ℹ] 双间接块号: " << double_inode.double_indirect << endl;
+
+    cout << "\n--- 阶段 7: 间接索引块释放测试 ---" << endl;
+    run_test("删除单间接测试文件", fs.delete_file("single_indirect_test.bin"));
+    run_test("删除双间接测试文件", fs.delete_file("double_indirect_test.bin"));
+    
+    // 验证文件确实被删除
+    iNode check_deleted;
+    run_test("验证单间接文件已删除", !fs.get_file_info("single_indirect_test.bin", check_deleted));
+    run_test("验证双间接文件已删除", !fs.get_file_info("double_indirect_test.bin", check_deleted));
+
+    cout << "\n--- 阶段 8: 测试结束，安全清理中间产物 ---" << endl;
     run_test("返回上一级目录 (cd ..)", fs.cd(".."));
     safe_cleanup();
     cout << "  [✔] 中间文件已全部无痕清理" << endl;

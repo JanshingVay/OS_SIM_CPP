@@ -222,14 +222,7 @@ void FileSystem::_free_file_blocks(int inode_id)
     if (!get_disk_manager().read_inode(inode_id, file_inode))
         return;
 
-    for (int i = 0; i < 10; ++i)
-    {
-        if (file_inode.direct_blocks[i] != -1)
-        {
-            get_disk_manager().free_block(file_inode.direct_blocks[i]);
-            file_inode.direct_blocks[i] = -1;
-        }
-    }
+    get_disk_manager().free_all_data_blocks(file_inode);
     get_disk_manager().write_inode(inode_id, file_inode);
 }
 
@@ -407,24 +400,28 @@ int FileSystem::write_file(const std::string &filename, const std::string &data,
         int old_blocks = (old_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
         int new_blocks = (new_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-        for (int i = new_blocks; i < old_blocks && i < 10; ++i)
+        for (int i = new_blocks; i < old_blocks; ++i)
         {
-            if (file_inode.direct_blocks[i] != -1)
+            int block_id = get_disk_manager().get_nth_block(file_inode, i);
+            if (block_id != -1)
             {
-                get_disk_manager().free_block(file_inode.direct_blocks[i]);
-                file_inode.direct_blocks[i] = -1;
+                get_disk_manager().free_block(block_id);
             }
         }
 
-        if (new_blocks > 0 && file_inode.direct_blocks[new_blocks - 1] != -1)
+        if (new_blocks > 0)
         {
-            int bytes_to_keep = new_size % BLOCK_SIZE;
-            if (bytes_to_keep > 0)
+            int last_block_id = get_disk_manager().get_nth_block(file_inode, new_blocks - 1);
+            if (last_block_id != -1)
             {
-                char last_buf[BLOCK_SIZE];
-                get_disk_manager().read_data_block(file_inode.direct_blocks[new_blocks - 1], last_buf);
-                memset(last_buf + bytes_to_keep, 0, BLOCK_SIZE - bytes_to_keep);
-                get_disk_manager().write_data_block(file_inode.direct_blocks[new_blocks - 1], last_buf);
+                int bytes_to_keep = new_size % BLOCK_SIZE;
+                if (bytes_to_keep > 0)
+                {
+                    char last_buf[BLOCK_SIZE];
+                    get_disk_manager().read_data_block(last_block_id, last_buf);
+                    memset(last_buf + bytes_to_keep, 0, BLOCK_SIZE - bytes_to_keep);
+                    get_disk_manager().write_data_block(last_block_id, last_buf);
+                }
             }
         }
     }
@@ -434,21 +431,17 @@ int FileSystem::write_file(const std::string &filename, const std::string &data,
     int block_idx = offset / BLOCK_SIZE;
     int block_off = offset % BLOCK_SIZE;
 
-    while (written < data_len && block_idx < 10)
+    while (written < data_len)
     {
-        if (file_inode.direct_blocks[block_idx] == -1)
+        int phys_block = get_disk_manager().allocate_nth_block(file_inode, block_idx);
+        if (phys_block == -1)
         {
-            int new_block = get_disk_manager().allocate_block();
-            if (new_block == -1)
-            {
-                std::cerr << "[文件系统] 错误：数据块分配失败（磁盘满）\n";
-                break;
-            }
-            file_inode.direct_blocks[block_idx] = new_block;
+            std::cerr << "[文件系统] 错误：数据块分配失败（磁盘满）\n";
+            break;
         }
 
         char block_buf[BLOCK_SIZE];
-        if (!get_disk_manager().read_data_block(file_inode.direct_blocks[block_idx], block_buf))
+        if (!get_disk_manager().read_data_block(phys_block, block_buf))
         {
             std::cerr << "[文件系统] 错误：读取数据块失败\n";
             break;
@@ -457,7 +450,7 @@ int FileSystem::write_file(const std::string &filename, const std::string &data,
         int write_len = std::min(data_len - written, BLOCK_SIZE - block_off);
         memcpy(block_buf + block_off, data.c_str() + written, write_len);
 
-        if (!get_disk_manager().write_data_block(file_inode.direct_blocks[block_idx], block_buf))
+        if (!get_disk_manager().write_data_block(phys_block, block_buf))
         {
             std::cerr << "[文件系统] 错误：写入数据块失败\n";
             break;
@@ -521,10 +514,14 @@ std::string FileSystem::read_file(const std::string &filename, int offset, int l
     int block_idx = offset / BLOCK_SIZE;
     int block_off = offset % BLOCK_SIZE;
 
-    while (read < len && block_idx < 10 && file_inode.direct_blocks[block_idx] != -1)
+    while (read < len)
     {
+        int phys_block = get_disk_manager().get_nth_block(file_inode, block_idx);
+        if (phys_block == -1)
+            break;
+
         char block_buf[BLOCK_SIZE];
-        if (!get_disk_manager().read_data_block(file_inode.direct_blocks[block_idx], block_buf))
+        if (!get_disk_manager().read_data_block(phys_block, block_buf))
         {
             std::cerr << "[文件系统] 错误：读取数据块失败\n";
             break;

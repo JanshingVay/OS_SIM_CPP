@@ -18,9 +18,16 @@
 #define INODE_TABLE_START 4     // 第 4~100 块：iNode 存储区
 #define DATA_BLOCK_START 101    // 第 101 块起：纯数据存储区
 
+#define PTRS_PER_BLOCK (BLOCK_SIZE / sizeof(int))  // 每个间接块可存 256 个指针
+
 // ==========================================
 // 数据结构：索引节点 (iNode)
 // 大小严格校验为 64 字节，一个 1KB 的块刚好存 16 个
+//
+// 索引结构：
+//   direct_blocks[10]          10 个直接块    → 可寻址 10 KB
+//   single_indirect             1 个一级间接  → 可寻址 256 个数据块 (256 KB)
+//   double_indirect             1 个二级间接  → 可寻址 256*256 个数据块 (64 MB)
 // ==========================================
 struct iNode {
     int i_num;             // inode 编号 (4字节)
@@ -28,16 +35,29 @@ struct iNode {
     int i_size;            // 文件大小 (字节) (4字节)
     int is_readonly;       // 0为读写，1为只读 (4字节)
     int direct_blocks[10]; // 直接数据块指针 (40字节)
-    char padding[8];       // 填充 (8字节) -> 总计 64 字节
+    int single_indirect;   // 一级间接块指针 (4字节)
+    int double_indirect;   // 二级间接块指针 (4字节)
 
     iNode() {
         i_num = -1;
         i_mode = 1;
         i_size = 0;
-        is_readonly = 0;   // 默认可读写
+        is_readonly = 0;
         for (int i = 0; i < 10; ++i)
             direct_blocks[i] = -1;
-        memset(padding, 0, sizeof(padding));
+        single_indirect = -1;
+        double_indirect = -1;
+    }
+
+    void normalize() {
+        for (int i = 0; i < 10; ++i)
+            if (direct_blocks[i] == 0) direct_blocks[i] = -1;
+        if (single_indirect == 0) single_indirect = -1;
+        if (double_indirect == 0) double_indirect = -1;
+    }
+
+    int max_data_blocks() const {
+        return 10 + PTRS_PER_BLOCK + PTRS_PER_BLOCK * PTRS_PER_BLOCK;
     }
 };
 
@@ -63,6 +83,10 @@ private:
     void _set_bit(char* bitmap, int index, bool value);
     bool _get_bit(const char* bitmap, int index);
 
+    int _alloc_indirect_data_block(int indirect_block_id, int index);
+    void _free_single_indirect_chain(int indirect_block_id);
+    void _free_double_indirect_chain(int indirect_block_id);
+
 public:
     DiskManager();
     ~DiskManager();
@@ -84,6 +108,10 @@ public:
 
     // 在 disk.h 的 public 下添加：
     void sync_disk();
+
+    int get_nth_block(const iNode& node, int n);
+    int allocate_nth_block(iNode& node, int n);
+    void free_all_data_blocks(iNode& node);
 };
 
 // 使用单例模式替代全局变量，解决静态初始化顺序(SIOF)问题
