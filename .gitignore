@@ -2,3 +2,8 @@
 *.exe
 test_fs
 shell
+run_fs_test_check
+os_sim_test_disk_memory_check
+test_process_ipc_device_check
+os_simulator_check
+integration_server.log

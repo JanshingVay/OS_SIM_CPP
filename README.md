@@ -156,12 +156,43 @@ msg_read 3
 
 ## 测试
 
+一键执行全部测试：
+
+```bash
+bash run_all_tests.sh
+```
+
+该脚本会编译并运行文件系统、磁盘+内存、进程+设备+IPC，以及 HTTP API 整体集成测试。
+
+单独运行已有模块测试：
+
 ```bash
 ./run_fs_test
 ./os_sim_test_disk_memory
 ```
 
-压力测试需要先启动主程序：
+单独运行进程、设备、IPC 测试：
+
+```bash
+g++ -O2 -std=c++14 -D_DEFAULT_SOURCE \
+    test_process_ipc_device.cpp \
+    memory/memory.cpp \
+    process/program.cpp \
+    process/device.cpp \
+    process/ipc.cpp \
+    disk.cpp \
+    -o test_process_ipc_device_check \
+    -pthread
+./test_process_ipc_device_check
+```
+
+单独运行 HTTP 整体集成测试时，需要先启动主程序：
+
+```bash
+python3 test_api_integration.py --base-url http://127.0.0.1:8080/api
+```
+
+压力测试同样需要先启动主程序：
 
 ```bash
 python3 test_os_pressure.py
@@ -174,6 +205,7 @@ python3 test_os_pressure.py
 - [小组分工与贡献率](docs/小组分工与贡献率.md)
 - [会议纪要](docs/会议纪要.md)
 - [测试结果](docs/测试结果.md)
+- [测试用例](docs/测试用例.md)
 
 ## 小组分工
 
