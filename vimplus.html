@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OS Simulator · Visual Kernel Console</title>
+    <title>Elaina OS · 操作系统原型演示平台</title>
     <style>
         :root {
             --bg: #f5f5f7;
@@ -34,8 +34,8 @@
             --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
         }
 
-/* ================= 登入界面样式 ================= */
-/* ================= Galgame 风格登入界面 ================= */
+/* ================= 启动界面样式 ================= */
+/* ================= 启动界面布局 ================= */
         #startScreen {
             position: fixed;
             top: 0; left: 0;
@@ -45,12 +45,12 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
-            align-items: flex-start; /* 菜单靠左对齐，更有 Galgame 感 */
+            align-items: flex-start; /* 菜单靠左对齐，便于演示入口聚合 */
             padding-left: 10%; /* 左侧留白 */
             transition: opacity 0.8s ease, transform 0.8s ease;
         }
 
-        /* Elaina 标题稍微缩小并移动位置 */
+        /* 系统标题样式 */
         .title-elaina {
             font-size: 90px;
             font-family: 'Brush Script MT', 'Dancing Script', cursive;
@@ -60,14 +60,14 @@
             animation: floatText 3s ease-in-out infinite;
         }
 
-        /* Galgame 菜单容器 */
+        /* 启动菜单容器 */
         .gal-menu {
             display: flex;
             flex-direction: column;
             gap: 15px;
         }
 
-        /* Galgame 风格按钮：长条状、半透明、带悬浮位移 */
+        /* 启动菜单按钮：长条状、半透明、带悬浮位移 */
         .gal-btn {
             width: 280px;
             padding: 12px 30px;
@@ -95,7 +95,7 @@
             box-shadow: 0 0 20px rgba(183, 0, 255, 0.6);
             border-color: #ff00ff;
         }
-        /* ================= 樱花点击绽放特效 ================= */
+        /* ================= 点击反馈特效 ================= */
         .sakura-burst {
             position: fixed;
             pointer-events: none; /* 绝对不能挡住真正元素的点击 */
@@ -105,7 +105,7 @@
             background: #ffb7c5;
             border-radius: 15px 0px 15px 0px;
             box-shadow: 0 0 10px rgba(255, 183, 197, 0.8);
-            /* 绽放动画，由 JS 动态传入移动距离(--tx, --ty)和旋转角度(--rot) */
+            /* 点击反馈动画，由 JS 动态传入移动距离(--tx, --ty)和旋转角度(--rot) */
             animation: sakuraBloom 0.8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
         }
 
@@ -116,7 +116,7 @@
             }
             100% { 
                 opacity: 0; 
-                /* 往四面八方炸开，并且旋转飘落 */
+                /* 向四周扩散并逐渐消失 */
                 transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1.2) rotate(var(--rot)); 
             }
         }
@@ -134,7 +134,7 @@
             right: 20px;
         }
 
-        /* 穿越动画保持不变... */
+        /* 启动过渡动画 */
         .dive-in {
             transform: scale(5) !important;
             filter: blur(20px);
@@ -1174,14 +1174,15 @@
             max-height: calc(100vh - 24px);
             z-index: 110;
             margin: 0;
-            resize: both;
+            resize: none;
             overflow: hidden;
             min-width: 360px;
             min-height: 220px;
             display: flex;
             flex-direction: column;
-            user-select: none;
-            touch-action: none;
+            user-select: text;
+            -webkit-user-select: text;
+            touch-action: auto;
         }
 
         .floating-console.docked {
@@ -1192,6 +1193,8 @@
         .floating-console .terminal-head {
             cursor: grab;
             flex: 0 0 auto;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         .floating-console .terminal-head:active {
@@ -1203,6 +1206,9 @@
             height: auto;
             max-height: none;
             min-height: 86px;
+            user-select: text;
+            -webkit-user-select: text;
+            cursor: text;
         }
 
         .floating-console .terminal-input {
@@ -1268,20 +1274,45 @@
             visibility: hidden;
         }
 
-        /* 👇👇👇 新增：解除终端边缘的裁剪限制，并完美修补内部圆角 👇👇👇 */
+        /* 终端保持裁剪，避免原生/自定义调整大小失效；标题栏和底部保持圆角。 */
         .floating-console:not(.minimized) {
-            overflow: visible !important; /* 允许小精灵溢出窗体 */
+            overflow: hidden !important;
         }
         .floating-console:not(.minimized) .terminal-head {
-            /* 顶部标题栏恢复圆角 */
             border-top-left-radius: var(--radius-xl);
             border-top-right-radius: var(--radius-xl);
         }
-        .floating-console:not(.minimized) .terminal-input:last-child {
-            /* 底部 AI 控制栏恢复圆角 */
+        .floating-console:not(.minimized) .terminal-input:last-of-type {
             border-bottom-left-radius: var(--radius-xl);
             border-bottom-right-radius: var(--radius-xl);
         }
+        .console-resize-grip {
+            position: absolute;
+            right: 7px;
+            bottom: 7px;
+            width: 18px;
+            height: 18px;
+            z-index: 150;
+            cursor: nwse-resize;
+            border-right: 2px solid rgba(255,255,255,.40);
+            border-bottom: 2px solid rgba(255,255,255,.40);
+            border-radius: 2px;
+            opacity: .86;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        .console-resize-grip::before {
+            content: '';
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            width: 8px;
+            height: 8px;
+            border-right: 1px solid rgba(255,255,255,.30);
+            border-bottom: 1px solid rgba(255,255,255,.30);
+        }
+        .floating-console.minimized .console-resize-grip { display: none; }
         /* 收起状态：变成一个可吸附的小圆球。点击小圆球恢复终端。 */
         .floating-console.minimized {
             width: 72px !important;
@@ -1674,7 +1705,7 @@
             }
         }
 
-        /* === Kernel Arcade: dino / plane battle === */
+        /* === 交互式调度负载演示区域 === */
         .arcade-layout {
             grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr);
             align-items: start;
@@ -1780,20 +1811,17 @@
 <body>
     <div class="noise"></div>
     <div id="startScreen">
-        <h1 class="title-elaina">Elaina OS Simulator</h1>
+        <h1 class="title-elaina">Elaina OS</h1>
         <div class="gal-menu">
-            <button class="gal-btn" id="startBtn">开始操作</button>
-            <button class="gal-btn" id="cgBtn">OS鉴赏</button>
-            <button class="gal-btn" id="exitBtn">退出系统</button>
+            <button class="gal-btn" id="startBtn">进入系统</button>
+            <button class="gal-btn" id="cgBtn">系统资料</button>
+            <button class="gal-btn" id="exitBtn">退出</button>
         </div>
     </div>
-
-
-    //---------------
 <div id="cgModal" class="cg-overlay">
     <div class="cg-container">
         <div class="cg-header">
-            <h2>❀ 特殊OSCG ❀</h2>
+            <h2>系统资料图</h2>
             <button class="cg-close" onclick="closeCG()">×</button>
         </div>
         <div class="cg-grid">
@@ -1804,10 +1832,8 @@
 </div>
 
 <div id="cgViewer" class="cg-viewer" onclick="closeViewer()">
-    <img id="cgViewerImg" src="" alt="Full CG">
+    <img id="cgViewerImg" src="" alt="资料图预览">
 </div>
-    //---------------
-    
     <div class="noise"></div>
     
     <style>
@@ -1894,7 +1920,7 @@
     
 .vim-editor {
       flex: 1; 
-      /* ↓↓↓ 换成可爱的背景图，并加一层黑色半透明渐变遮罩防止看不清字 ↓↓↓ */
+      /* 编辑器背景图与半透明遮罩，保证文字可读性 */
       background: linear-gradient(rgba(30, 30, 30, 0.85), rgba(30, 30, 30, 0.85)), url('cute.png') center/cover no-repeat;
       color: #d4d4d4; padding: 20px;
       border: none; outline: none; font-family: var(--mono); font-size: 15px;
@@ -1909,14 +1935,14 @@
             font-family: var(--mono);
         }
 
-        /* ================= 樱花鼠标拖尾特效 ================= */
+        /* ================= 鼠标轨迹反馈特效 ================= */
         .sakura-petal {
             position: fixed;
             pointer-events: none; /* 关键：确保它不会挡住鼠标的点击 */
             z-index: 999999; /* 在最顶层 */
             width: 12px;
             height: 18px;
-            background: #ffb7c5; /* 樱花粉色 */
+            background: #ffb7c5; /* 反馈粒子颜色 */
             /* 用 CSS 画出一个花瓣的形状 */
             border-radius: 15px 0px 15px 0px; 
             box-shadow: 0 0 10px rgba(255, 183, 197, 0.8);
@@ -1924,7 +1950,7 @@
             animation: sakuraFall 1.2s ease-out forwards;
         }
 
-        /* 花瓣飘落、旋转、渐隐的动画 */
+        /* 粒子移动、旋转、渐隐动画 */
         @keyframes sakuraFall {
             0% { 
                 opacity: 0.8; 
@@ -1932,13 +1958,13 @@
             }
             100% { 
                 opacity: 0; 
-                /* 往下掉、往右飘，并且旋转 */
+                /* 向下移动、横向偏移并旋转 */
                 transform: translateY(80px) translateX(40px) rotate(360deg) scale(0.3); 
             }
         }
         /* ================================================= */
 
-        /* ================= CG 鉴赏（相册）样式 ================= */
+        /* ================= 系统资料图展示样式 ================= */
         .cg-overlay {
             position: fixed; inset: 0; z-index: 100005; /* 层级在开始界面之上 */
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px);
@@ -2010,9 +2036,9 @@
                 <div>
                     <p class="eyebrow"
                         style="background:rgba(255,255,255,.08); color:#d7d7df; border-color:rgba(255,255,255,.16); margin:0 0 16px;">
-                        <span class="pulse"></span>Kernel Boot Sequence</p>
+                        <span class="pulse"></span>系统启动序列</p>
                     <h2 class="boot-title">正在启动<br />OS Kernel</h2>
-                    <div class="boot-sub">加载 MMU、虚拟磁盘、进程管理器、I/O 控制器、IPC 子系统与 Web Console。验收时可作为系统启动演示。</div>
+                    <div class="boot-sub">加载 MMU、虚拟磁盘、进程管理器、I/O 控制器、IPC 子系统与 Web 控制台。验收时可作为系统启动演示。</div>
                 </div>
                 <div class="boot-ring"></div>
             </div>
@@ -2026,29 +2052,29 @@
     </div>
     <main class="app">
         <nav class="nav">
-            <div class="brand"><span class="orb"></span><span>OS Simulator</span><span class="pill"
-                    id="connectionPill"><span class="pulse"></span>Connecting</span></div>
+            <div class="brand"><span class="orb"></span><span>Elaina OS</span><span class="pill"
+                    id="connectionPill"><span class="pulse"></span>连接中</span></div>
             <div class="nav-links">
-                <a href="#moduleLab">模块验收</a><a href="#schedulerGame">调度小游戏</a><a href="#arcadeGame">Arcade</a><a
-                    href="#swapChallenge">Swap</a><a
-                    href="#process">Process</a><a href="#memory">Memory</a><a href="#filesystem">File System</a><a
-                    href="#deviceipc">Device & IPC</a><a href="#console">Console</a>
+                <a href="#moduleLab">模块验收</a><a href="#arcadeGame">运行小游戏</a><a
+                    href="#swapChallenge">页面置换</a><a
+                    href="#process">进程管理</a><a href="#memory">内存管理</a><a href="#filesystem">文件系统</a><a
+                    href="#deviceipc">设备与 IPC</a><a href="#console">控制台</a>
                 <button onclick="toggleConsole()">终端</button><button onclick="toggleTheme()">切换主题</button>
             </div>
         </nav>
 
         <section class="hero">
             <div class="eyebrow"><span class="pulse"></span>Visual Kernel Console · 课程设计最终展示版</div>
-            <h1>一个更像成品的操作系统原型。</h1>
-            <p>将进程调度、分页内存、文件系统、设备分配、银行家算法与 IPC 集成在同一个高级可视化控制台中。</p>
+            <h1>操作系统原型系统可视化演示平台</h1>
+            <p>将进程调度、分页内存、文件系统、设备分配、银行家算法与 IPC 集成在同一个可视化演示界面中。</p>
             <div class="hero-actions">
-                <button class="btn-primary" onclick="startBoot()" id="powerBtn">Boot System</button>
+                <button class="btn-primary" onclick="startBoot()" id="powerBtn">启动系统</button>
                 <button onclick="refreshAll()">刷新状态</button>
                 <button onclick="sendDirectCmd('help')">查看命令</button>
                 <button class="btn-blue"
                     onclick="document.getElementById('moduleLab').scrollIntoView({behavior:'smooth'})">分模块验收</button>
                 <button class="btn-purple"
-                    onclick="document.getElementById('schedulerGame').scrollIntoView({behavior:'smooth'})">调度小游戏</button>
+                    onclick="document.getElementById('arcadeGame').scrollIntoView({behavior:'smooth'})">运行小游戏</button>
             </div>
         </section>
 
@@ -2080,7 +2106,7 @@
                 <div class="card-title">
                     <div>
                         <h2>分模块验收演示台</h2>
-                        <div class="sub">按老师“先分模块开发、再集成调试”的要求，把磁盘、文件、内存、进程、设备/IPC
+                        <div class="sub">按验收教师“先分模块开发、再集成调试”的要求，把磁盘、文件、内存、进程、设备/IPC
                             分开演示。每个模块按钮都会自动执行一组只围绕该模块的测试命令，日志会在右下角常驻终端中同步显示。</div>
                     </div><span class="badge">Module Test</span>
                 </div>
@@ -2091,8 +2117,8 @@
                             <h3>磁盘模块</h3>
                             <ul class="check-list">
                                 <li>vdisk 持久化挂载</li>
-                                <li>inode / block 分配</li>
-                                <li>大文件跨块写入验证</li>
+                                <li>inode / bitmap / block 分配</li>
+                                <li>跨块写入与 LZW 打包验证</li>
                             </ul>
                         </div><button class="btn-purple" onclick="runModuleDemo('disk')">运行磁盘持久化测试</button>
                     </div>
@@ -2101,9 +2127,9 @@
                             <div class="module-icon">▣</div>
                             <h3>文件模块</h3>
                             <ul class="check-list">
-                                <li>目录创建与切换</li>
-                                <li>读写、偏移读、重命名</li>
-                                <li>只读权限边界测试</li>
+                                <li>目录创建、切换与树形展示</li>
+                                <li>读写、偏移读写、复制与搜索</li>
+                                <li>权限、重命名与归档验证</li>
                             </ul>
                         </div><button class="btn-yellow" onclick="runModuleDemo('file')">运行文件测试</button>
                     </div>
@@ -2112,9 +2138,9 @@
                             <div class="module-icon">▦</div>
                             <h3>内存模块</h3>
                             <ul class="check-list">
-                                <li>地址访问与转换</li>
-                                <li>TLB / 缺页统计</li>
-                                <li>FIFO/LRU/CLOCK 策略切换</li>
+                                <li>分页地址访问与转换</li>
+                                <li>TLB / 缺页 / 动态扩缩容</li>
+                                <li>FIFO/LRU/CLOCK 与共享内存</li>
                             </ul>
                         </div><button class="btn-green" onclick="runModuleDemo('memory')">运行内存测试</button>
                     </div>
@@ -2123,9 +2149,9 @@
                             <div class="module-icon">◎</div>
                             <h3>进程模块</h3>
                             <ul class="check-list">
-                                <li>创建、阻塞、唤醒</li>
-                                <li>挂起与恢复</li>
-                                <li>调度算法与统计</li>
+                                <li>MLFQ 与多核 SMP 调度</li>
+                                <li>软中断信号、阻塞/唤醒</li>
+                                <li>ulimit、进程组与 Job Control</li>
                             </ul>
                         </div><button class="btn-blue" onclick="runModuleDemo('process')">运行进程测试</button>
                     </div>
@@ -2135,8 +2161,8 @@
                             <h3>设备模块</h3>
                             <ul class="check-list">
                                 <li>设备申请与等待队列</li>
-                                <li>释放与唤醒</li>
-                                <li>银行家矩阵展示</li>
+                                <li>释放、唤醒与进程联动</li>
+                                <li>银行家安全检测与多设备场景</li>
                             </ul>
                         </div><button class="btn-red" onclick="runModuleDemo('device')">运行设备测试</button>
                     </div>
@@ -2145,9 +2171,9 @@
                             <div class="module-icon">⌁</div>
                             <h3>IPC 模块</h3>
                             <ul class="check-list">
-                                <li>信号量 P/V</li>
-                                <li>消息发送与读取</li>
-                                <li>共享内存映射</li>
+                                <li>信号量 P/V 与阻塞唤醒</li>
+                                <li>消息邮箱发送与读取</li>
+                                <li>与共享内存和进程状态联动</li>
                             </ul>
                         </div><button onclick="runModuleDemo('ipc')">运行 IPC 测试</button>
                     </div>
@@ -2161,7 +2187,7 @@
                 <div class="card-title">
                     <div>
                         <h2 id="demoTitle">测试执行面板</h2>
-                        <div class="sub" id="demoSubtitle">选择左侧任意模块后，会在这里显示测试步骤、命令和验证点。</div>
+                        <div class="sub" id="demoSubtitle">选择左侧任意模块后，会显示最新版测试步骤、命令和验证点。</div>
                     </div><span class="badge" id="demoBadge">Idle</span>
                 </div>
                 <div class="demo-status">
@@ -2211,7 +2237,7 @@
                     <button onclick="arcadeTogglePause()">Pause / Resume</button>
                     <button onclick="arcadeSetMode('dino')">小恐龙模式</button>
                     <button onclick="arcadeSetMode('plane')">飞机大战模式</button>
-                    <button class="btn-yellow" onclick="arcadeSpawnBackendWave()">制造调度压力波</button>
+                    <button class="btn-yellow" onclick="arcadeSpawnBackendWave()">制造调度负载</button>
                     <button class="btn-purple" onclick="arcadeWriteLog()">写入游戏日志</button>
                     <button class="btn-red" onclick="arcadeReset()">Reset</button>
                 </div>
@@ -2264,12 +2290,14 @@
             </aside>
         </section>
 
+
+
         <section id="process" class="section grid main-grid">
             <div class="card">
                 <div class="card-title">
                     <div>
-                        <h2>Process Scheduler</h2>
-                        <div class="sub">查看 PCB 状态迁移、调度统计和队列变化。</div>
+                        <h2>进程调度器</h2>
+                        <div class="sub">查看 PCB 状态迁移、MLFQ 多级队列、SMP 核心、软中断信号与进程组控制。</div>
                     </div><span class="badge">PCB</span>
                 </div>
                 <div class="surface" id="runningBox"><span>当前运行</span><span class="value">无</span></div>
@@ -2340,7 +2368,7 @@
             <div class="card">
                 <div class="card-title">
                     <div>
-                        <h2>Process Control</h2>
+                        <h2>进程控制</h2>
                         <div class="sub">创建进程、切换算法、Fork/Wait 以及各类状态控制。</div>
                     </div>
                 </div>
@@ -2355,11 +2383,14 @@
                         <button onclick="sendDirectCmd('setsched sjf')">SJF</button>
                         <button onclick="sendDirectCmd('setsched fcfs')">FCFS</button>
                         <button onclick="sendDirectCmd('setsched hrrn')">HRRN</button>
+                        <button onclick="sendDirectCmd('setsched mlfq')">MLFQ</button>
                     </div>
                     <div class="surface stack">
                         <div class="grid three"><input id="opPid" type="number" placeholder="PID" /><input
-                                id="blockTicks" type="number" placeholder="阻塞 tick，可空" /><input id="blockReason"
+                                id="blockTicks" type="number" placeholder="阻塞 tick，默认 0" /><input id="blockReason"
                                 placeholder="阻塞原因" /></div>
+                        <div class="grid four"><input id="procSignalPid" type="number" placeholder="signal PID" /><input id="procSignalNo" placeholder="信号编号" value="19" /><input id="procUlimitPid" type="number" placeholder="ulimit PID" /><input id="procUlimitVal" type="number" placeholder="子进程上限" value="3" /></div>
+                        <div class="grid four"><input id="procPgidPid" type="number" placeholder="setpgid PID" /><input id="procPgidVal" type="number" placeholder="PGID" value="100" /><input id="procKillGroupVal" type="number" placeholder="killgroup PGID" value="100" /><input id="procPstatPid" type="number" placeholder="pstat PID" /></div>
                         <div class="row">
                             <button class="btn-green" onclick="cmdWithPid('fork')">Fork</button>
                             <button class="btn-yellow" onclick="cmdWithPid('wait')">Wait</button>
@@ -2370,6 +2401,11 @@
                             <button class="btn-purple" onclick="cmdWithPid('suspend')">Suspend</button>
                             <button class="btn-blue" onclick="cmdWithPid('resume')">Resume</button>
                             <button onclick="cmdWithPid('pinfo')">pinfo</button>
+                            <button onclick="sendSignalUI()">signal</button>
+                            <button onclick="setUlimitUI()">ulimit</button>
+                            <button onclick="setPgidUI()">setpgid</button>
+                            <button onclick="killGroupUI()">killgroup</button>
+                            <button onclick="sendDirectCmd('pstat '+(val('procPstatPid')||val('opPid')||'2'))">pstat</button>
                         </div>
                     </div>
                     <div class="grid three">
@@ -2398,7 +2434,7 @@
             <div class="card">
                 <div class="card-title">
                     <div>
-                        <h2>Memory & MMU</h2>
+                        <h2>内存与 MMU</h2>
                         <div class="sub">分页、TLB、缺页中断与页面置换状态。</div>
                     </div><span class="badge" id="replacementPolicy">-</span>
                 </div>
@@ -2444,7 +2480,7 @@
             <div class="card">
                 <div class="card-title">
                     <div>
-                        <h2>MMU Operations</h2>
+                        <h2>MMU 操作</h2>
                         <div class="sub">模拟地址访问、地址转换、扩缩容和置换策略切换。</div>
                     </div>
                 </div>
@@ -2469,40 +2505,40 @@
             <div class="card" style="grid-column: 1 / -1;">
                 <div class="card-title">
                     <div>
-                        <h2>置换接力 · Swap Challenge</h2>
-                        <div class="sub">创建一个<strong>逻辑页多于可用物理帧</strong>的进程，按顺序访问虚拟页，迫使内核发生<strong>缺页与页面置换</strong>。可切换 <code>FIFO / LRU / CLOCK</code> 对比累计缺页次数（配合上方 MMU 观测曲线）。逻辑页数约 49、默认 32 帧时会自动换出。</div>
+                        <h2>页面置换压力演示</h2>
+                        <div class="sub">创建一个<strong>逻辑页多于可用物理帧</strong>的进程，按顺序访问虚拟页，触发<strong>缺页与页面置换</strong>。可切换 <code>FIFO / LRU / CLOCK</code> 对比累计缺页次数（配合上方 MMU 观测曲线）。逻辑页数约 49、默认 32 帧时会自动换出。</div>
                     </div>
                     <span class="badge" id="swapPolicyBadge">--</span>
                 </div>
                 <div class="grid three section" style="gap:14px;">
                     <div class="surface">
-                        <div class="small">关卡进程 PID</div>
+                        <div class="small">演示进程 PID</div>
                         <div class="value" id="swapPidDisplay">--</div>
-                        <div class="small">准备关卡后自动创建 <code>swap_*</code> 进程</div>
+                        <div class="small">准备演示后自动创建 <code>swap_*</code> 进程</div>
                     </div>
                     <div class="surface">
-                        <div class="small">本关缺页增量（累计−开局快照）</div>
+                        <div class="small">本次缺页增量（累计−起始快照）</div>
                         <div class="value" id="swapFaultDelta">0</div>
                         <div class="small">与内核 <code>page_faults</code> 对齐</div>
                     </div>
                     <div class="surface">
-                        <div class="small">下一拍访问</div>
+                        <div class="small">下一次访问</div>
                         <div class="value" id="swapNextPage" style="font-size:22px;">--</div>
-                        <div class="small">访问序列循环接力</div>
+                        <div class="small">访问序列循环执行</div>
                     </div>
                 </div>
                 <div class="swap-seq-preview section" id="swapSeqPreview" style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.5;padding:12px 14px;border-radius:16px;border:1px solid var(--hairline);background:rgba(127,127,127,.06);max-height:96px;overflow:auto;">序列未生成</div>
                 <div class="row section" style="flex-wrap:wrap;gap:10px;">
-                    <button class="btn-primary" onclick="swapPrepareLevel()">准备关卡</button>
-                    <button class="btn-blue" onclick="swapStepOnce()">访问下一页（接力）</button>
+                    <button class="btn-primary" onclick="swapPrepareLevel()">准备演示进程</button>
+                    <button class="btn-blue" onclick="swapStepOnce()">访问下一页</button>
                     <button class="btn-yellow" onclick="swapAutoBurst(12)">连访 12 次</button>
                     <button onclick="sendDirectCmd('setmem FIFO')">FIFO</button>
                     <button onclick="sendDirectCmd('setmem LRU')">LRU</button>
                     <button onclick="sendDirectCmd('setmem CLOCK')">CLOCK</button>
                     <button onclick="sendDirectCmd('memstat')">memstat</button>
-                    <button class="btn-red" onclick="swapResetGame()">结束并清理关卡进程</button>
+                    <button class="btn-red" onclick="swapResetGame()">结束并清理演示进程</button>
                 </div>
-                <div class="small section" style="color:var(--muted);">提示：若物理帧较多仍不见换出，可在 <code>os_memory_config.txt</code> 把 <code>physical_pages</code> 调到 6～8 后再「准备关卡」。准备时会 <code>memreset</code> 清零统计。</div>
+                <div class="small section" style="color:var(--muted);">提示：若物理帧较多仍不见换出，可在 <code>os_memory_config.txt</code> 把 <code>physical_pages</code> 调到 6～8 后再“准备演示进程”。准备时会通过 <code>memreset</code> 清零统计。</div>
             </div>
         </section>
 
@@ -2510,7 +2546,7 @@
             <div class="card">
                 <div class="card-title">
                     <div>
-                        <h2>Virtual File System</h2>
+                        <h2>虚拟文件系统</h2>
                         <div class="sub">目录导航、inode、权限、数据块和文件内容查看。</div>
                     </div><span class="badge">VFS</span>
                 </div>
@@ -2542,7 +2578,9 @@
                     <div class="grid two"><input id="fsOld" placeholder="旧名，可空则使用选中项" /><input id="fsNew"
                             placeholder="新名" /></div>
                     <div><button onclick="renameFile()">rename</button><button class="btn-red"
-                            onclick="confirmFormat()">format</button></div>
+                            onclick="confirmFormat()">format</button><button onclick="sendDirectCmd('tree')">tree</button><button onclick="copyFileUI()">cp</button><button onclick="grepFileUI()">grep</button><button onclick="tarCreateUI()">tar -c</button><button onclick="tarExtractUI()">tar -x</button><button onclick="openVimSelected()">vim</button></div>
+                    <div class="grid three"><input id="fsSrcFile" placeholder="源文件" value="note.txt" /><input id="fsDstFile" placeholder="目标文件" value="backup.txt" /><input id="fsGrepKey" placeholder="检索关键字" value="hello" /></div>
+                    <div class="grid three"><input id="fsGrepFile" placeholder="检索文件" value="note.txt" /><input id="fsTarFile" placeholder="归档文件" value="demo.tar" /><input id="fsTarSrc" placeholder="归档源文件" value="note.txt" /></div>
                     <div class="surface stack">
                         <input id="fsWriteName" placeholder="写入目标文件" />
                         <textarea id="fsContent" placeholder="文件内容 / 点击文件后自动填充"></textarea>
@@ -2621,7 +2659,7 @@
                     <button class="dot y" title="归位终端" onclick="resetConsoleDock(event)" aria-label="归位终端"></button>
                     <button class="dot g" title="清空终端" onclick="clearConsole(event)" aria-label="清空终端"></button>
                 </div>
-                <span class="small console-title">常驻 Kernel Console · 红点收起成小圆球 · 拖动标题栏移动 · 拖拽右下角调整大小 · Tab 补全</span>
+                <span class="small console-title">常驻 Kernel Console · 红点收起 · 拖动标题栏移动 · 拖动右下角缩放 · 支持复制与多行粘贴</span>
                 <span class="resize-hint" title="拖动右下角调整大小">↘</span>
             </div>
             
@@ -2629,7 +2667,7 @@
             
             <div class="terminal-input">
                 <input id="cmdInput"
-                    placeholder="root# 输入命令，按 Tab 自动补全，例如 create editor 10 4096 8" autocomplete="off"
+                    placeholder="root# 输入命令，Tab 补全，上/下键切换历史，例如 create editor 10 4096 8" autocomplete="off"
                     spellcheck="false" />
                 <button class="btn-primary" onclick="sendCommand()">Send</button>
             </div>
@@ -2637,15 +2675,15 @@
             <div class="terminal-input" style="border-top: 1px dashed rgba(191, 90, 242, 0.3); padding-top: 10px; background: rgba(191, 90, 242, 0.05); display: flex; gap: 8px; align-items: center;">
                 <span style="color: #bf5af2; font-family: var(--mono); font-weight: bold; flex-shrink: 0;">AI#</span>
                 <input id="aiInput" style="flex: 1; border-color: rgba(191, 90, 242, 0.3); min-width: 0;" placeholder="输入自然语言或点击右侧麦克风说话..." onkeydown="if(event.key==='Enter') sendAiCommand()" autocomplete="off" spellcheck="false" />
-                
                 <button id="voiceBtn" class="btn-purple" style="padding: 0; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; transition: all 0.2s;" onclick="toggleVoiceInput()" title="点击开始说话">🎤</button>
-                
                 <input id="aiApiKey" type="password" placeholder="API Key" style="width: 100px; flex-shrink: 0; border-color: rgba(191, 90, 242, 0.3);" title="填入 API Key" />
                 <button class="btn-purple" style="flex-shrink: 0;" onclick="sendAiCommand()">✨ 执行</button>
             </div>
+
+            <span id="consoleResizeGrip" class="console-resize-grip" title="拖动调整终端大小" aria-label="拖动调整终端大小"></span>
         </section>
 
-        <div class="footer">OS Simulator · 分模块验收展示版 · 保持原有后端 API 兼容</div>
+        <div class="footer">Elaina OS · 分模块验收展示版 · 保持后端 API 兼容</div>
     </main>
 
     <script>
@@ -2886,7 +2924,7 @@
         }
         async function playBootLogs(logs) {
             const progress = byId('bootProgress');
-            const lines = logs.length ? logs : ['[0.000000] Booting OS Simulator Kernel...', '[0.240000] System boot successful.'];
+            const lines = logs.length ? logs : ['[0.000000] Booting Elaina OS Kernel...', '[0.240000] System boot successful.'];
             for (let i = 0; i < lines.length; i++) {
                 bootLogLine(lines[i]);
                 appendTerm(lines[i], '#9df7a3');
@@ -2941,10 +2979,18 @@
             renderPidLegend(data.memoryBitmap);
             renderMemoryGridMMU(data);
 
+            const cores = Array.isArray(data.cores) ? data.cores : [];
             const rp = data.runningProcess;
-            byId('runningBox').innerHTML = rp ?
-                `<div class="row" style="justify-content:space-between"><div><div class="small">当前运行</div><div class="value">P${esc(rp.pid)} · ${esc(rp.name)} <span class="badge">父P${esc(rp.parentPID)}</span></div></div><span class="badge">remain ${esc(rp.remainTime)}</span><span class="badge">priority ${esc(rp.priority)} / ${esc(rp.dynamicPriority)}</span></div>` :
-                `<div class="row" style="justify-content:space-between"><div><div class="small">当前运行</div><div class="value">无</div></div><span class="badge">idle</span></div>`;
+            if (cores.length) {
+                byId('runningBox').innerHTML = `<div class="small">SMP 多核运行状态</div>` + cores.map(c => {
+                    const p = c.process;
+                    return p ? `<div class="row" style="justify-content:space-between;margin-top:8px"><div><span class="badge">Core ${esc(c.coreId)}</span> <span class="value" style="font-size:20px">P${esc(p.pid)} · ${esc(p.name)}</span></div><span class="badge">remain ${esc(p.remainTime)}</span><span class="badge">Q${esc(p.queueLevel ?? 0)}</span><span class="badge">PGID ${esc(p.pgid ?? '-')}</span></div>` : `<div class="row" style="justify-content:space-between;margin-top:8px"><div><span class="badge">Core ${esc(c.coreId)}</span> <span class="value" style="font-size:20px">空闲</span></div><span class="badge">idle</span></div>`;
+                }).join('');
+            } else {
+                byId('runningBox').innerHTML = rp ?
+                    `<div class="row" style="justify-content:space-between"><div><div class="small">当前运行</div><div class="value">P${esc(rp.pid)} · ${esc(rp.name)} <span class="badge">父P${esc(rp.parentPID)}</span></div></div><span class="badge">remain ${esc(rp.remainTime)}</span><span class="badge">priority ${esc(rp.priority)} / ${esc(rp.dynamicPriority)}</span></div>` :
+                    `<div class="row" style="justify-content:space-between"><div><div class="small">当前运行</div><div class="value">无</div></div><span class="badge">idle</span></div>`;
+            }
 
             renderReady(data.readyQueue || []);
             renderBlocked(data.blockQueue || []);
@@ -2961,14 +3007,13 @@
             renderBanker(data.banker || {});
             renderSemaphores(data.semaphores || []);
             renderMessages(data.messages || []);
-            renderArcadeGame(data);
             updateSwapHud();
         }
 
         function renderReady(list) {
             setText('readyCount', list.length);
             byId('readyQueueBody').innerHTML = list.length ? list.map(p =>
-                `<tr><td>P${esc(p.pid)}</td><td>${esc(p.name)}</td><td>${esc(p.remainTime)}</td><td>${esc(p.priority)} / ${esc(p.dynamicPriority)}</td><td><button class="btn-red" onclick="sendDirectCmd('kill ${esc(p.pid)}')">Kill</button> <button class="btn-purple" onclick="sendDirectCmd('suspend ${esc(p.pid)}')">挂起</button></td></tr>`
+                `<tr><td>P${esc(p.pid)}</td><td>${esc(p.name)}</td><td>${esc(p.remainTime)}</td><td>优先级 ${esc(p.priority)} / ${esc(p.dynamicPriority)}<br><span class="small">MLFQ Q${esc(p.queueLevel ?? 0)} · PGID ${esc(p.pgid ?? '-')} · signals ${(p.pendingSignals || []).length}</span></td><td><button class="btn-red" onclick="sendDirectCmd('kill ${esc(p.pid)}')">Kill</button> <button class="btn-purple" onclick="sendDirectCmd('suspend ${esc(p.pid)}')">挂起</button></td></tr>`
             ).join('') : '<tr><td class="small">空</td></tr>';
         }
         function renderBlocked(list) {
@@ -3033,7 +3078,42 @@
         function renderSemaphores(list) { byId('semContainer').innerHTML = list.length ? list.map(s => `<div style="border-bottom:1px solid var(--hairline); padding:8px 0;"><b>${esc(s.name)}</b> = <span class="value">${esc(s.value)}</span><br><span class="small">等待: ${(s.waitQueue || []).length ? 'P' + s.waitQueue.join(', P') : '无'}</span></div>`).join('') : '<span class="small">无</span>'; }
         function renderMessages(list) { byId('msgContainer').innerHTML = list.length ? list.map(m => `<div>Mailbox P${esc(m.pid)}: <b class="value">${esc(m.count)}</b> 条</div>`).join('') : '<span class="small">空</span>'; }
 
+        const commandHistory = [];
+        let commandHistoryIndex = 0;
+        let commandDraft = '';
+        let restoringHistory = false;
+        const MAX_COMMAND_HISTORY = 200;
+
+        function pushCommandHistory(cmd) {
+            cmd = String(cmd || '').trim();
+            if (!cmd) return;
+            if (commandHistory[commandHistory.length - 1] !== cmd) {
+                commandHistory.push(cmd);
+                if (commandHistory.length > MAX_COMMAND_HISTORY) commandHistory.shift();
+            }
+            commandHistoryIndex = commandHistory.length;
+            commandDraft = '';
+        }
+
+        function restoreCommandFromHistory(input, direction) {
+            if (!input || !commandHistory.length) return;
+            if (commandHistoryIndex === commandHistory.length) commandDraft = input.value;
+            if (direction < 0) {
+                commandHistoryIndex = Math.max(0, commandHistoryIndex - 1);
+            } else {
+                commandHistoryIndex = Math.min(commandHistory.length, commandHistoryIndex + 1);
+            }
+            restoringHistory = true;
+            input.value = commandHistoryIndex === commandHistory.length ? commandDraft : commandHistory[commandHistoryIndex];
+            const pos = input.value.length;
+            input.setSelectionRange?.(pos, pos);
+            restoringHistory = false;
+        }
+
         async function sendDirectCmd(cmd) {
+            cmd = String(cmd || '').trim();
+            if (!cmd) return null;
+            pushCommandHistory(cmd);
             appendTerm('root# ' + cmd, '#fff');
             try {
                 const res = await apiFetch('/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: cmd }) });
@@ -3044,7 +3124,7 @@
                     if (match) {
                         openVimEditor(match[1].trim()); // 匹配到文件名，弹出编辑器面板
                     }
-                    // 把 [VIM_TRIGGER] 这句话从屏幕日志里删掉，保持假装我们真的进入了 Vim
+                    // 从屏幕日志中移除内部触发标记，保持前端展示简洁
                     const cleanMsg = data.msg.replace(/\[VIM_TRIGGER\].*/g, '').trim();
                     if (cleanMsg) appendTerm(cleanMsg, '#9df7a3');
                 } else {
@@ -3190,98 +3270,66 @@
     });
     // ===========================
        
-        function sendCommand() { const input = byId('cmdInput'); const cmd = input.value.trim(); if (cmd) { sendDirectCmd(cmd); input.value = ''; } }
-        
-        // ================= AI 自然语言控制模块 =================
-        // 这里默认使用的是兼容 OpenAI 的接口地址，你可以替换为 DeepSeek、通义千问、Kimi 等服务商的 URL 和模型
-       // 修改为 SiliconFlow 的请求地址
-        const AI_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'; 
-
-        // 这是一个完全免费、极速、且聪明的阿里开源模型
-        const AI_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
-
-        async function sendAiCommand() {
-            const inputEl = byId('aiInput');
-            const apiKeyEl = byId('aiApiKey');
-            const text = inputEl.value.trim();
-            const apiKey = apiKeyEl.value.trim();
-
-            if (!text) return appendTerm('[AI] 请输入自然语言指令。', '#e2a9ff');
-            if (!apiKey) return appendTerm('[AI] 请先在右侧输入 API Key。', '#ff9d98');
-
-            appendTerm(`[AI 思考中] 分析意图："${text}" ...`, '#e2a9ff');
-            inputEl.value = ''; // 清空输入框
-
-            // 核心：告诉大模型它应该扮演什么角色，以及系统支持哪些语法
-            const systemPrompt = `
-你是一个底层操作系统的命令翻译引擎。你的任务是将用户的自然语言意图，精准翻译成以下系统支持的命令字符串。
-【严格规则】
-1. 仅输出最终的单行命令，不要有任何解释，不要 Markdown 格式。
-2. 如果意图涉及多个命令且逻辑连贯，请用英文分号 ";" 隔开。如果是用 Vim 编辑文件，翻译为 "vim <文件名>"。
-3. 如果无法理解，输出 "echo 无法识别指令"
-
-【系统命令语法字典】
-- 进程：create <name> <time> <mem> <pri> (默认参数 10 2048 5)、kill <pid>、block <pid> <ticks> <reason>、wakeup <pid>、suspend <pid>、resume <pid>、fork <pid>、wait <pid>、ptree
-- 文件：touch <file>、mkdir <dir>、rm <file/dir>、cat <file>、write <file> <content>、ls、pwd、cd <dir>、chmod <file> <ro/rw>、stat <file>、rename <old> <new>、vim <file>
-- 内存：access <pid> <addr>、translate <pid> <addr>、resize <pid> <delta>、setmem <FIFO|LRU|CLOCK>
-- 设备：io <pid> <devId>、release <pid>
-- IPC：sem_create <name> <init>、P <name> <pid>、V <name>、msg_send <from> <to> <msg>、msg_read <pid>
-`;
-
-            try {
-                const response = await fetch(AI_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify({
-                        model: AI_MODEL,
-                        messages: [
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: text }
-                        ],
-                        temperature: 0.1 // 极低的温度保证指令的精准性
-                    })
-                });
-
-                if (!response.ok) throw new Error(`HTTP 错误: ${response.status}`);
-                
-                const data = await response.json();
-                if (data.choices && data.choices.length > 0) {
-                    let translatedCmd = data.choices[0].message.content.trim();
-                    
-                    // ================= 强力格式清洗 =================
-                    // 1. 去除所有 Markdown 代码块标记 (如 ```bash, ```, 以及单反引号 `)
-                    translatedCmd = translatedCmd.replace(/```[a-zA-Z]*\n?/g, '').replace(/[`]/g, '');
-                    // 2. 将所有的换行符强行替换为空格，防止命令断行
-                    translatedCmd = translatedCmd.replace(/\r?\n/g, ' ');
-                    // 3. 将连续的多个空格压缩成一个空格
-                    translatedCmd = translatedCmd.replace(/\s+/g, ' ').trim();
-                    // ===============================================
-                    
-                    appendTerm(`[AI 生成指令] ${translatedCmd}`, '#bf5af2');
-                    
-                    // 支持 AI 返回多条分号隔开的命令
-                    const cmds = translatedCmd.split(';').map(c => c.trim()).filter(Boolean);
-                    for (const cmd of cmds) {
-                        await sendDirectCmd(cmd); 
-                        await sleep(200); // 稍微停顿，防止后端处理太快
-                    }
-                } else {
-                    appendTerm('[AI] 返回格式异常。', '#ff9d98');
-                }
-            } catch (e) {
-                appendTerm(`[AI 请求失败] ${e.message}`, '#ff9d98');
+        function sendCommand() {
+            const input = byId('cmdInput');
+            const cmd = input.value.trim();
+            if (cmd) {
+                sendDirectCmd(cmd);
+                input.value = '';
+                commandHistoryIndex = commandHistory.length;
+                commandDraft = '';
             }
         }
-        // =======================================================
-
-        byId('cmdInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendCommand(); if (e.key === 'Tab') { e.preventDefault(); completeCommandInput(e.target); } });
+        
+        byId('cmdInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendCommand();
+                return;
+            }
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                completeCommandInput(e.target);
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                restoreCommandFromHistory(e.target, -1);
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                restoreCommandFromHistory(e.target, 1);
+                return;
+            }
+        });
+        byId('cmdInput').addEventListener('input', e => {
+            if (restoringHistory) return;
+            commandHistoryIndex = commandHistory.length;
+            commandDraft = e.target.value;
+        });
+        byId('cmdInput').addEventListener('paste', e => {
+            const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+            if (text.includes('\n')) {
+                e.preventDefault();
+                runPastedCommands(text);
+            }
+        });
 
         function uiCreateProcess() { sendDirectCmd(`create ${q(val('pName') || 'P_New')} ${val('pTime') || '10'} ${val('pMem') || '2048'} ${val('pPri') || '5'}`); }
         function cmdWithPid(cmd) { const pid = val('opPid'); if (!pid) return appendTerm('[UI] 请先填写 PID', '#ffd08a'); sendDirectCmd(`${cmd} ${pid}`); }
         function blockPid() { const pid = val('opPid'); if (!pid) return appendTerm('[UI] 请先填写 PID', '#ffd08a'); sendDirectCmd(`block ${pid} ${val('blockTicks') || '0'} ${q(val('blockReason') || '手动阻塞')}`); }
+
+        function sendSignalUI(){ const pid=val('procSignalPid')||val('opPid')||'2'; const sig=val('procSignalNo')||'19'; return sendDirectCmd(`signal ${pid} ${sig}`); }
+        function setUlimitUI(){ const pid=val('procUlimitPid')||val('opPid')||'2'; const limit=val('procUlimitVal')||'3'; return sendDirectCmd(`ulimit ${pid} ${limit}`); }
+        function setPgidUI(){ const pid=val('procPgidPid')||val('opPid')||'2'; const pgid=val('procPgidVal')||'100'; return sendDirectCmd(`setpgid ${pid} ${pgid}`); }
+        function killGroupUI(){ const pgid=val('procKillGroupVal')||'100'; return sendDirectCmd(`killgroup ${pgid}`); }
+        function copyFileUI(){ const src=val('fsSrcFile')||val('fsName')||'note.txt'; const dst=val('fsDstFile')||'backup.txt'; return sendDirectCmd(`cp ${q(src)} ${q(dst)}`); }
+        function grepFileUI(){ const key=val('fsGrepKey')||'hello'; const file=val('fsGrepFile')||val('fsName')||'note.txt'; return sendDirectCmd(`grep ${q(key)} ${q(file)}`); }
+        function tarCreateUI(){ const out=val('fsTarFile')||'demo.tar'; const src=val('fsTarSrc')||val('fsName')||'note.txt'; return sendDirectCmd(`tar -c ${q(out)} ${q(src)}`); }
+        function tarExtractUI(){ const file=val('fsTarFile')||'demo.tar'; return sendDirectCmd(`tar -x ${q(file)}`); }
+        function openVimSelected(){ const file=val('fsName')||val('fsWriteName')||'note.txt'; return sendDirectCmd(`vim ${q(file)}`); }
+
         function accessAddr() { const pid = val('memPid'), addr = val('memAddr'); if (!pid || !addr) return appendTerm('[UI] 请填写 PID 和逻辑地址', '#ffd08a'); sendDirectCmd(`access ${pid} ${addr}`); }
         function translateAddr() { const pid = val('memPid'), addr = val('memAddr'); if (!pid || !addr) return appendTerm('[UI] 请填写 PID 和逻辑地址', '#ffd08a'); sendDirectCmd(`translate ${pid} ${addr}`); }
         function resizeProcess() { const pid = val('resizePid'), delta = val('resizeDelta'); if (!pid || !delta) return appendTerm('[UI] 请填写 PID 和 deltaBytes', '#ffd08a'); sendDirectCmd(`resize ${pid} ${delta}`); }
@@ -3307,7 +3355,7 @@
         function chmodFile() { const name = val('fsName'), mode = val('fsMode') || 'rw'; if (!name) return appendTerm('[UI] 请填写文件名', '#ffd08a'); sendDirectCmd(`chmod ${q(name)} ${mode}`); }
         function writeFile(withOffset) { const name = val('fsWriteName') || val('fsName'); const content = byId('fsContent').value; if (!name) return appendTerm('[UI] 请填写目标文件', '#ffd08a'); withOffset ? sendDirectCmd(`write_at ${q(name)} ${val('fsOffset') || '0'} ${q(content)}`) : sendDirectCmd(`write ${q(name)} ${q(content)}`); }
         function readAtFile() { const name = val('fsWriteName') || val('fsName'); if (!name) return appendTerm('[UI] 请填写目标文件', '#ffd08a'); sendDirectCmd(`read_at ${q(name)} ${val('fsOffset') || '0'} ${val('fsReadLen') || '64'}`); }
-        function confirmFormat() { if (confirm('确认手动格式化虚拟文件系统？这会清空 vdisk.bin 中的目录和文件数据。平时演示持久化时不要点击。')) sendDirectCmd('format'); }
+        function confirmFormat() { if (confirm('确认格式化虚拟文件系统？此操作会清空 vdisk.bin 中的目录和文件数据，建议仅在重置演示环境时使用。')) sendDirectCmd('format'); }
 
         function reqDev(devId) { const pid = val(`devInput_${devId}`); if (!pid) return appendTerm('[UI] 请填写 PID', '#ffd08a'); sendDirectCmd(`io ${pid} ${devId}`); }
         function requestDevice() { const pid = val('devPid'), id = val('devId'); if (!pid || !id) return appendTerm('[UI] 请填写 PID 和设备 ID', '#ffd08a'); sendDirectCmd(`io ${pid} ${id}`); }
@@ -3385,7 +3433,7 @@
                 c.style.resize = 'none';
             } else {
                 c.classList.remove('minimized');
-                c.style.resize = 'both';
+                c.style.resize = 'none';
             }
         }
         function snapConsoleToEdges() {
@@ -3485,7 +3533,7 @@
                     height: Math.max(220, safe.height) + 'px',
                     left: safe.left + 'px',
                     top: safe.top + 'px',
-                    resize: 'both'
+                    resize: 'none'
                 });
                 byId('cmdInput')?.focus();
             } else {
@@ -3500,7 +3548,7 @@
         }
 
         // 添加新的命令补全关键词
-        const BASE_COMPLETIONS = ['help', 'create', 'fork', 'wait', 'exit', 'ptree', 'kill', 'stop', 'block', 'wakeup', 'suspend', 'resume', 'setsched', 'priority', 'sjf', 'fcfs', 'hrrn', 'ps', 'queues', 'pinfo', 'pstat', 'resize', 'memstat', 'memreset', 'setmem', 'FIFO', 'LRU', 'CLOCK', 'access', 'translate', 'shm', 'ls', 'pwd', 'cd', 'touch', 'mkdir', 'rm', 'rmdir', 'cat', 'read_at', 'write', 'write_at', 'chmod', 'ro', 'rw', 'stat', 'rename', 'format', 'io', 'release', 'sem_create', 'P', 'V', 'wait', 'signal', 'msg_send', 'msg_read'];
+        const BASE_COMPLETIONS = ['help', 'create', 'fork', 'wait', 'exit', 'ptree', 'kill', 'stop', 'block', 'wakeup', 'suspend', 'resume', 'setsched', 'priority', 'sjf', 'fcfs', 'hrrn', 'mlfq', 'ps', 'queues', 'pinfo', 'pstat', 'resize', 'signal', 'sig', 'send_signal', 'ulimit', 'setpgid', 'killgroup', 'memstat', 'memreset', 'setmem', 'FIFO', 'LRU', 'CLOCK', 'access', 'translate', 'shm', 'ls', 'pwd', 'cd', 'touch', 'mkdir', 'rm', 'rmdir', 'cat', 'read_at', 'write', 'write_at', 'chmod', 'ro', 'rw', 'stat', 'rename', 'format', 'io', 'release', 'sem_create', 'P', 'V', 'msg_send', 'msg_read'];
         function commonPrefix(list) {
             if (!list.length) return '';
             let p = list[0];
@@ -3594,7 +3642,7 @@
             lastGameRunningPid = null;
             renderSchedulerGame(latestStatus || {});
             toggleConsole(false);
-            appendTerm('[Game] 调度小游戏已生成任务波。点击“投递”会真实创建后端进程。', '#9bd2ff');
+            appendTerm('[Demo] 已生成调度负载任务波。点击“投递”会真实创建后端进程。', '#9bd2ff');
         }
 
         function getAllProcessesFromStatus(data) {
@@ -3789,7 +3837,7 @@
                 await refreshAll();
                 swapGame.faultsBaseline = Number(latestStatus.page_faults ?? latestStatus.memoryStats?.pageFaults ?? 0);
 
-                appendTerm(`[Swap] 关卡就绪：${swapGame.name} PID=${pid}，虚拟约 49 页；请用「访问下一页」或「连访」触发缺页与置换。`, '#9df7a3');
+                appendTerm(`[Swap] 演示已准备：${swapGame.name} PID=${pid}，虚拟约 49 页；请用“访问下一页”或“连访”触发缺页与置换。`, '#9df7a3');
                 const navEl = document.getElementById('swapChallenge');
                 if (navEl) navEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } catch (e) {
@@ -3801,7 +3849,7 @@
 
         async function swapStepOnce() {
             if (!swapGame.pid || !swapGame.seq.length) {
-                appendTerm('[Swap] 请先点击「准备关卡」。', '#ffd08a');
+                appendTerm('[Swap] 请先点击“准备演示进程”。', '#ffd08a');
                 return;
             }
             const pg = swapGame.seq[swapGame.idx % swapGame.seq.length];
@@ -3813,7 +3861,7 @@
 
         async function swapAutoBurst(n) {
             if (!swapGame.pid || !swapGame.seq.length) {
-                appendTerm('[Swap] 请先点击「准备关卡」。', '#ffd08a');
+                appendTerm('[Swap] 请先点击“准备演示进程”。', '#ffd08a');
                 return;
             }
             const k = Math.min(Math.max(1, Number(n) || 12), 64);
@@ -3839,11 +3887,11 @@
             const prevEl = byId('swapSeqPreview');
             if (prevEl) prevEl.textContent = '序列未生成';
             await refreshAll();
-            appendTerm('[Swap] 已清理关卡进程（若存在）。', '#ffd08a');
+            appendTerm('[Swap] 已清理演示进程（若存在）。', '#ffd08a');
         }
 
 
-        // === Kernel Arcade: Google Dino / Plane Battle style game ===
+        // === 交互式调度负载演示逻辑 ===
         const arcade = {
             canvas: null, ctx: null, running: false, paused: false, mode: 'dino',
             pid: null, procName: '', score: 0, hp: 3, frame: 0,
@@ -3888,7 +3936,7 @@
             arcade.paused = false;
             arcade.procName = 'arcade_' + Date.now().toString().slice(-6);
             setText('arcadeLastCmd', 'create ' + arcade.procName);
-            arcadeTrace('启动 Arcade：创建前台游戏进程。');
+            arcadeTrace('启动交互负载演示：创建前台演示进程。');
             const data = await sendDirectCmd(`create ${arcade.procName} 999 4096 13`);
             const msg = data?.msg || '';
             const m = msg.match(/PID:\s*(\d+)/i) || msg.match(/PID\s*(\d+)/i);
@@ -3913,25 +3961,25 @@
         }
 
         function arcadeTogglePause() {
-            if (!arcade.running) return appendTerm('[Arcade] 请先 Start Arcade。', '#ffd08a');
+            if (!arcade.running) return appendTerm('[负载演示] 请先启动演示。', '#ffd08a');
             arcade.paused = !arcade.paused;
-            arcadeTrace(arcade.paused ? '游戏暂停：后端状态仍继续 tick。' : '游戏继续。');
+            arcadeTrace(arcade.paused ? '演示已暂停：后端状态仍继续 tick。' : '演示继续。');
             if (!arcade.paused) requestAnimationFrame(arcadeLoop);
         }
 
         function arcadeSetMode(mode) {
             arcade.mode = mode === 'plane' ? 'plane' : 'dino';
-            setText('arcadeModeLabel', arcade.mode.toUpperCase());
+            setText('arcadeModeLabel', arcade.mode === 'dino' ? '跳跃负载' : '移动负载');
             byId('arcadeTip').innerText = arcade.mode === 'dino'
-                ? '小恐龙模式：按 Space 跳跃躲避障碍；碰撞会让游戏进程进入阻塞。'
-                : '飞机大战模式：WASD/方向键移动，Space 射击；敌机波次会制造后端调度压力。';
-            arcadeTrace('切换模式：' + (arcade.mode === 'dino' ? '小恐龙' : '飞机大战'));
+                ? '跳跃负载模式：按 Space 触发交互事件；碰撞会让演示进程进入阻塞。'
+                : '移动负载模式：WASD/方向键移动，Space 触发交互事件；后台进程波次会制造调度负载。';
+            arcadeTrace('切换模式：' + (arcade.mode === 'dino' ? '跳跃负载' : '移动负载'));
             if (arcade.mode === 'plane') sendDirectCmd('setsched priority');
         }
 
         async function arcadeSpawnBackendWave() {
             const stamp = Date.now().toString().slice(-5);
-            arcadeTrace('制造调度压力波：创建 CPU / IO / 短作业后台进程。');
+            arcadeTrace('生成调度负载：创建 CPU / I/O / 短作业后台进程。');
             const cmds = [
                 `create wave_cpu_${stamp} 14 2048 5`,
                 `create wave_io_${stamp} 9 1536 11`,
@@ -3941,16 +3989,30 @@
         }
 
         async function arcadeWriteLog() {
-            const cmd = `write ${q('arcade_log.txt')} ${q('Arcade score=' + arcade.score + ', hp=' + arcade.hp + ', pid=' + (arcade.pid || 'none'))}`;
+            const file = 'load_demo_log.txt';
+            const content = 'LoadDemo score=' + arcade.score + ', hp=' + arcade.hp + ', pid=' + (arcade.pid || 'none');
+            try { await refreshAll(); } catch (e) { /* 如果刷新失败，下面仍会尝试创建日志文件。 */ }
+            const exists = Array.isArray(lastFiles) && lastFiles.some(f => f && f.name === file);
+
+            // 后端 write 命令只负责写已有文件，不会自动创建文件。
+            // 因此这里先确保日志文件存在，再写入内容，避免“文件不存在 / 写入失败”。
+            if (!exists) {
+                const touchCmd = `touch ${q(file)}`;
+                setText('arcadeLastCmd', touchCmd);
+                await sendDirectCmd(touchCmd);
+                await sleep(160);
+            }
+
+            const cmd = `write ${q(file)} ${q(content)}`;
             setText('arcadeLastCmd', cmd);
             await sendDirectCmd(cmd);
-            arcadeTrace('写入文件系统日志 arcade_log.txt。');
+            arcadeTrace(`写入文件系统日志 ${file}。`);
         }
 
         function arcadeJump() {
             if (!arcade.player.grounded) return;
             arcade.player.vy = -14.8; arcade.player.grounded = false;
-            arcadeTrace('Space 跳跃：前台进程产生一次 CPU burst。');
+            arcadeTrace('Space 触发交互事件：前台进程产生一次 CPU burst。');
             if (arcade.pid && arcade.score - arcade.lastMilestone > 120) arcadeMemoryAccess();
         }
 
@@ -3960,12 +4022,12 @@
             const cmd = `access ${arcade.pid} ${addr}`;
             setText('arcadeLastCmd', cmd);
             await sendDirectCmd(cmd);
-            arcadeTrace(`游戏渲染访问虚拟地址 ${addr}，观察 TLB / 缺页统计变化。`);
+            arcadeTrace(`渲染过程访问虚拟地址 ${addr}，观察 TLB / 缺页统计变化。`);
         }
 
         function arcadeShoot() {
             arcade.bullets.push({ x: arcade.plane.x + arcade.plane.w, y: arcade.plane.y + arcade.plane.h / 2 - 2, w: 12, h: 4, vx: 9 });
-            arcadeTrace('Space 射击：一次前台交互事件，CPU 继续调度游戏进程。');
+            arcadeTrace('Space 交互：一次前台事件，CPU 继续调度演示进程。');
         }
 
         async function arcadeCollision(reason) {
@@ -3973,14 +4035,14 @@
             setText('arcadeHp', arcade.hp);
             arcadeTrace(`碰撞：${reason}，HP -1。映射为后端 I/O wait / block。`);
             if (arcade.pid) {
-                const cmd = `block ${arcade.pid} 3 ${q('Arcade collision: ' + reason)}`;
+                const cmd = `block ${arcade.pid} 3 ${q('Load demo collision: ' + reason)}`;
                 setText('arcadeLastCmd', cmd);
                 await sendDirectCmd(cmd);
             }
             if (arcade.hp <= 0) {
                 arcade.running = false;
-                arcadeTrace('Game Over：游戏进程保留在后端，可查看 pinfo / pstat。');
-                appendTerm('[Arcade] Game Over. 可点击 Start 重新创建新游戏进程。', '#ff8f87');
+                arcadeTrace('演示结束：演示进程保留在后端，可查看 pinfo / pstat。');
+                appendTerm('[负载演示] 演示结束。可点击“启动演示”重新创建演示进程。', '#ff8f87');
             }
         }
 
@@ -4033,7 +4095,7 @@
             arcade.enemies.forEach(e => e.x -= e.vx);
             for (const b of arcade.bullets) {
                 for (const e of arcade.enemies) {
-                    if (e.hp > 0 && arcadeHit(b, e)) { e.hp = 0; b.x = 9999; arcade.score += 35; arcadeTrace('击落敌机：score +35；对应一个短作业完成。'); }
+                    if (e.hp > 0 && arcadeHit(b, e)) { e.hp = 0; b.x = 9999; arcade.score += 35; arcadeTrace('击落后台对象：score +35；对应一个短作业完成。'); }
                 }
             }
             for (const e of arcade.enemies) if (e.hp > 0 && arcadeHit(p, e)) { e.hp = 0; arcadeCollision('enemy plane'); break; }
@@ -4071,9 +4133,9 @@
             if (!arcade.running) {
                 ctx.fillStyle = 'rgba(0,0,0,.42)'; ctx.fillRect(0, 0, 920, 420);
                 ctx.fillStyle = '#fff'; ctx.font = '800 34px -apple-system, Segoe UI, sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText('Kernel Arcade', 460, 188);
+                ctx.fillText('调度负载演示', 460, 188);
                 ctx.font = '600 15px -apple-system, Segoe UI, sans-serif'; ctx.fillStyle = '#b8c7e6';
-                ctx.fillText('点击 Start Arcade 开始；游戏事件会真实调用后端 OS API', 460, 220);
+                ctx.fillText('点击“启动演示”开始；交互事件会真实调用后端 OS API', 460, 220);
             } else if (arcade.paused) {
                 ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.fillRect(0, 0, 920, 420);
                 ctx.fillStyle = '#fff'; ctx.font = '800 34px -apple-system, Segoe UI, sans-serif'; ctx.textAlign = 'center';
@@ -4109,7 +4171,7 @@
             arcade.traces.unshift(`t=${latestStatus?.nowTime ?? '--'} · ${msg}`);
             arcade.traces = arcade.traces.slice(0, 40);
             const list = byId('arcadeTraceList');
-            if (list) list.innerHTML = arcade.traces.length ? arcade.traces.slice(0, 14).map(x => `<div class="trace-item">${esc(x)}</div>`).join('') : '<div class="trace-item">等待游戏开始...</div>';
+            if (list) list.innerHTML = arcade.traces.length ? arcade.traces.slice(0, 14).map(x => `<div class="trace-item">${esc(x)}</div>`).join('') : '<div class="trace-item">等待演示开始...</div>';
         }
 
         function arcadeExplainScheduling(data) {
@@ -4117,11 +4179,11 @@
             const ready = data?.readyQueue || [];
             const rp = data?.runningProcess;
             const proc = arcadeFindProc(data);
-            let base = proc ? `游戏进程 P${proc.pid} 当前处于 ${proc._queue}。` : '游戏进程尚未创建或未被状态快照捕获。';
-            if (algo.includes('SJF')) base += ' SJF 会优先选择剩余时间最短的 Ready 进程，因此短作业/敌机波次可能更快被调度。';
+            let base = proc ? `演示进程 P${proc.pid} 当前处于 ${proc._queue}。` : '演示进程尚未创建或未被状态快照捕获。';
+            if (algo.includes('SJF')) base += ' SJF 会优先选择剩余时间最短的 Ready 进程，因此短作业/后台对象波次可能更快被调度。';
             else if (algo.includes('FCFS')) base += ' FCFS 按进入就绪队列的先后顺序执行，适合观察队列先来先服务。';
             else if (algo.includes('HRRN')) base += ' HRRN 会提高等待较久进程的响应比，减少长期等待。';
-            else base += ' Priority-RR 会综合动态优先级和时间片轮转，交互型游戏进程优先级较高时更容易获得 CPU。';
+            else base += ' Priority-RR 会综合动态优先级和时间片轮转，交互型演示进程优先级较高时更容易获得 CPU。';
             if (rp) base += ` 当前 CPU 正在运行 P${rp.pid}(${rp.name})。Ready 队列长度 ${ready.length}。`;
             return base;
         }
@@ -4137,7 +4199,7 @@
             arcadeInit();
             const proc = arcadeFindProc(data);
             if (proc && !arcade.pid) arcade.pid = proc.pid;
-            setText('arcadeModeLabel', arcade.mode.toUpperCase());
+            setText('arcadeModeLabel', arcade.mode === 'dino' ? '跳跃负载' : '移动负载');
             setText('arcadeScore', arcade.score);
             setText('arcadeHp', arcade.hp);
             setText('arcadePid', arcade.pid || '--');
@@ -4172,10 +4234,11 @@
             }
         }
         async function demoDisk() {
-            setDemoHeader('磁盘', '验证 vdisk.bin 持久化挂载、inode/block 分配以及跨块写入后的 stat 展示；本测试不执行 format，不会主动清空虚拟磁盘。');
+            setDemoHeader('磁盘', '验证最新版磁盘链路：vdisk 持久化挂载、inode/block/bitmap 分配、跨块写入、stat 展示以及 LZW 打包压缩落盘。');
             const tag = Date.now().toString().slice(-6);
             const dir = `disk_lab_${tag}`;
             const file = `block_probe_${tag}.bin`;
+            const archive = `disk_archive_${tag}.tar`;
             const payload = 'DISK_BLOCK_TEST_'.repeat(180);
             await executeDemoSteps([
                 { cmd: 'pwd', desc: '显示当前挂载路径，证明系统直接使用已有 vdisk.bin 状态。' },
@@ -4184,13 +4247,15 @@
                 { cmd: `cd ${dir}`, desc: '进入磁盘测试目录。' },
                 { cmd: `touch ${file}`, desc: '创建测试文件，验证文件 inode 分配。' },
                 { cmd: `write ${file} ${q(payload)}`, desc: '写入超过单块容量的内容，触发多个数据块分配。' },
-                { cmd: `stat ${file}`, desc: '查看 inode、文件大小和直接数据块号。' },
-                { cmd: 'ls', desc: '列出目录，确认磁盘对象可见。' },
-                { cmd: 'cd ..', desc: '返回根目录，结束磁盘模块测试；重启后再次 ls 可验证持久化。' }
+                { cmd: `stat ${file}`, desc: '查看 inode、文件大小、权限和直接数据块号。' },
+                { cmd: `tar -c ${archive} ${file}`, desc: '使用 LZW 打包压缩，验证归档内容也能落盘到虚拟磁盘。' },
+                { cmd: `stat ${archive}`, desc: '查看归档文件 inode 与块分配情况。' },
+                { cmd: 'tree', desc: '以树形结构展示目录和文件对象。' },
+                { cmd: 'cd ..', desc: '返回根目录，重启后再次 ls 可验证持久化。' }
             ]);
         }
         async function demoFile() {
-            setDemoHeader('文件', '验证目录操作、文件读写、偏移读取、权限控制、重命名和内容查看。');
+            setDemoHeader('文件', '验证最新版文件系统功能：目录、读写、偏移读写、权限、复制、grep、重命名、树形展示与归档。');
             const tag = Date.now().toString().slice(-6);
             const dir = `fs_lab_${tag}`;
             await executeDemoSteps([
@@ -4198,27 +4263,37 @@
                 { cmd: `cd ${dir}`, desc: '进入测试目录，验证 cd/pwd/ls 链路。' },
                 { cmd: 'touch report.txt', desc: '创建普通文件。' },
                 { cmd: 'write report.txt OS_FILE_SYSTEM_DEMO_CONTENT', desc: '写入文件内容。' },
-                { cmd: 'stat report.txt', desc: '查看 inode、大小、权限和 block。' },
-                { cmd: 'read_at report.txt 3 12', desc: '偏移读取，验证 read_at 接口。' },
+                { cmd: 'write_at report.txt 3 _PATCH_', desc: '执行偏移写入，验证不会错误截断文件尾部。' },
+                { cmd: 'cat report.txt', desc: '读取文件，确认偏移写入后的最终内容。' },
+                { cmd: 'read_at report.txt 3 16', desc: '偏移读取，验证 read_at 接口。' },
+                { cmd: 'cp report.txt report_copy.txt', desc: '复制文件，验证读取再写入链路。' },
+                { cmd: 'grep PATCH report_copy.txt', desc: '搜索复制文件内容，验证 grep 功能。' },
                 { cmd: 'chmod report.txt ro', desc: '设置只读权限。' },
                 { cmd: 'write report.txt SHOULD_FAIL', desc: '尝试写只读文件，验证权限边界。' },
                 { cmd: 'chmod report.txt rw', desc: '恢复可写权限。' },
                 { cmd: 'rename report.txt report_final.txt', desc: '重命名文件。' },
-                { cmd: 'cat report_final.txt', desc: '读取最终文件内容。' },
+                { cmd: 'tar -c files.tar report_final.txt report_copy.txt', desc: '打包压缩多个文件，验证归档命令。' },
+                { cmd: 'stat files.tar', desc: '查看归档文件 inode 信息。' },
+                { cmd: 'tree', desc: '展示本目录文件结构。' },
                 { cmd: 'cd ..', desc: '返回上级目录。' }
             ]);
         }
         async function demoMemory() {
-            setDemoHeader('内存', '验证分页内存、地址访问、地址转换、TLB/缺页统计和置换策略切换。');
+            setDemoHeader('内存', '验证最新版内存管理：分页、地址转换、TLB/缺页统计、动态扩缩容、共享内存以及 FIFO/LRU/CLOCK 策略切换。');
             const pid = await demoCreateProcess('mem_probe', 18, 8192, 9);
-            addDemoStep(1, `create mem_probe 18 8192 9`, '创建内存测试进程，作为后续地址访问对象。', 'done');
+            const pid2 = await demoCreateProcess('mem_peer', 16, 4096, 8);
+            addDemoStep(1, `create mem_probe/mem_peer`, '创建两个内存测试进程，分别用于地址访问和共享内存。', 'done');
             const P = pid || val('memPid') || 2;
+            const Q = pid2 || 3;
             await executeDemoSteps([
+                { cmd: 'memreset', desc: '清空 TLB/缺页等统计，便于观察本轮测试。' },
                 { cmd: 'setmem FIFO', desc: '切换 FIFO 页面置换策略。' },
                 { cmd: `access ${P} 0x0`, desc: '访问第 0 页，触发/命中页表和 TLB。' },
                 { cmd: `access ${P} 0x400`, desc: '访问同页不同偏移，观察 TLB 命中。' },
                 { cmd: `translate ${P} 0x400`, desc: '进行虚拟地址到物理页框转换。' },
-                { cmd: `access ${P} 0x1000`, desc: '访问新虚拟页，观察缺页统计。' },
+                { cmd: `resize ${P} 4096`, desc: '动态扩展进程逻辑内存。' },
+                { cmd: `access ${P} 0x2000`, desc: '访问扩容后的新页，观察缺页处理。' },
+                { cmd: `shm ${P} ${Q} 1`, desc: '建立两个进程间的共享页映射。' },
                 { cmd: 'setmem LRU', desc: '切换 LRU 页面置换策略。' },
                 { cmd: `access ${P} 0x1800`, desc: '继续访问，观察页面命中/缺页变化。' },
                 { cmd: 'setmem CLOCK', desc: '切换 CLOCK 页面置换策略。' },
@@ -4226,57 +4301,75 @@
             ]);
         }
         async function demoProcess() {
-            setDemoHeader('进程', '验证进程创建、队列迁移、阻塞/唤醒、挂起/恢复和调度统计。');
-            const p1 = await demoCreateProcess('proc_alpha', 12, 2048, 16);
-            const p2 = await demoCreateProcess('proc_beta', 8, 2048, 8);
-            const p3 = await demoCreateProcess('proc_gamma', 10, 2048, 5);
-            addDemoStep(1, 'create proc_alpha/proc_beta/proc_gamma', '创建三个 PCB，满足多进程管理演示。', 'done');
+            setDemoHeader('进程', '验证最新版进程管理功能：MLFQ 多级反馈队列、SMP 双核心调度、软中断信号、ulimit 子进程配额、进程组与批量控制。');
+            const p1 = await demoCreateProcess('mlfq_cpu_A', 30, 2048, 16);
+            const p2 = await demoCreateProcess('mlfq_io_B', 28, 2048, 12);
+            const p3 = await demoCreateProcess('signal_stop_C', 26, 2048, 10);
+            const p4 = await demoCreateProcess('signal_kill_D', 26, 2048, 9);
+            addDemoStep(1, 'create mlfq_cpu_A / mlfq_io_B / signal_stop_C / signal_kill_D', '创建四个 PCB，用于观察多核心并行调度和后续进程控制。', 'done');
             await executeDemoSteps([
-                { cmd: 'setsched priority', desc: '切换到优先级 + 时间片调度。' },
-                { cmd: `block ${p2 || 2} 2 io_wait`, desc: '将一个进程移入阻塞队列。' },
-                { cmd: `wakeup ${p2 || 2}`, desc: '唤醒阻塞进程，观察队列迁移。' },
-                { cmd: `suspend ${p3 || 3}`, desc: '挂起进程并释放其内存。' },
-                { cmd: `resume ${p3 || 3}`, desc: '恢复挂起进程。' },
-                { cmd: 'setsched hrrn', desc: '切换 HRRN，验证多调度算法。' },
-                { cmd: `pinfo ${p1 || 2}`, desc: '查看单进程 PCB 详情。' },
-                { cmd: 'pstat', desc: '查看调度统计。' }
+                { cmd: 'setsched mlfq', desc: '切换到 MLFQ 多级反馈队列调度，Ready 队列按 Q0/Q1/Q2 组织。', delay: 650 },
+                { cmd: 'ps', desc: '查看双核心运行状态、MLFQ 层级、Ready/Blocked/Suspend/Zombie 队列。', delay: 700 },
+                { cmd: `pinfo ${p1 || 2}`, desc: '查看 PCB 扩展字段：PGID、maxChildrenLimit、queueLevel、pendingSignals。' },
+                { cmd: `block ${p2 || 3} 0 io_wait_manual`, desc: '手动阻塞进程，ticks=0 表示不会被系统 tick 自动唤醒。' },
+                { cmd: `wakeup ${p2 || 3}`, desc: '手动唤醒阻塞进程；MLFQ 下 I/O 型进程可提升队列层级。' },
+                { cmd: `ulimit ${p1 || 2} 1`, desc: '将 P1 最大子进程数限制为 1。' },
+                { cmd: `setpgid ${p1 || 2} 501`, desc: '将 P1 放入进程组 PGID=501。' },
+                { cmd: `setpgid ${p2 || 3} 501`, desc: '将 P2 放入同一进程组，为 killgroup 做准备。' },
+                { cmd: `fork ${p1 || 2}`, desc: '第一次 fork 应成功，子进程继承父进程 PGID。' },
+                { cmd: `fork ${p1 || 2}`, desc: '第二次 fork 应被 ulimit 拒绝，验证资源配额。' },
+                { cmd: `signal ${p3 || 4} 19`, desc: '向 P3 投递 SIGSTOP(19)，进程在获得 CPU 前先处理待处理信号并挂起。', delay: 1200 },
+                { cmd: `resume ${p3 || 4}`, desc: '恢复被 SIGSTOP 挂起的进程。' },
+                { cmd: `signal ${p4 || 5} 9`, desc: '向 P4 投递 SIGKILL(9)，由调度器在运行前处理并终止。', delay: 1200 },
+                { cmd: `killgroup 501`, desc: '按 PGID 批量终止 P1/P2 及其同组子进程。' },
+                { cmd: 'ps', desc: '再次查看多核心、MLFQ 层级、进程组和队列变化。' },
+                { cmd: 'pstat', desc: '输出调度统计。' }
             ]);
         }
         async function demoDevice() {
-            setDemoHeader('设备', '验证设备申请、等待队列、释放和银行家算法矩阵展示。');
+            setDemoHeader('设备', '验证最新版设备管理：设备申请、等待队列、释放唤醒、多设备申请与银行家算法安全检测。');
             const p1 = await demoCreateProcess('dev_owner', 20, 2048, 10);
             const p2 = await demoCreateProcess('dev_waiter', 20, 2048, 9);
-            addDemoStep(1, 'create dev_owner/dev_waiter', '创建两个设备测试进程。', 'done');
+            const p3 = await demoCreateProcess('dev_disk_user', 18, 2048, 8);
+            addDemoStep(1, 'create dev_owner/dev_waiter/dev_disk_user', '创建三个设备测试进程，用于观察等待队列和多设备分配。', 'done');
             await executeDemoSteps([
-                { cmd: `io ${p1 || 2} 0`, desc: 'P1 申请设备 0，触发银行家算法安全检测。' },
-                { cmd: `io ${p2 || 3} 0`, desc: 'P2 申请同一设备，观察等待队列。' },
-                { cmd: `release ${p1 || 2}`, desc: 'P1 释放设备，验证等待进程后续可被调度。' },
-                { cmd: `io ${p2 || 3} 1`, desc: 'P2 申请另一设备，观察 Allocation/Need 矩阵。' },
-                { cmd: `release ${p2 || 3}`, desc: '释放 P2 设备资源，恢复安全状态。' }
+                { cmd: `io ${p1 || 2} 0`, desc: 'P1 申请设备 0，触发银行家算法安全检测并占用设备。' },
+                { cmd: `io ${p2 || 3} 0`, desc: 'P2 申请同一设备，设备忙时进入等待队列。' },
+                { cmd: `io ${p3 || 4} 2`, desc: 'P3 申请磁盘设备，验证不同设备可并行占用。' },
+                { cmd: 'ps', desc: '查看设备申请后进程阻塞/就绪状态联动。' },
+                { cmd: `release ${p1 || 2}`, desc: 'P1 释放设备，等待队列中的进程可继续参与调度。' },
+                { cmd: `io ${p2 || 3} 1`, desc: 'P2 再申请键盘设备，观察 Allocation/Need 矩阵变化。' },
+                { cmd: `release ${p2 || 3}`, desc: '释放 P2 设备资源。' },
+                { cmd: `release ${p3 || 4}`, desc: '释放 P3 设备资源，恢复安全状态。' },
+                { cmd: 'ps', desc: '再次查看队列，确认设备阻塞状态已解除。' }
             ]);
         }
         async function demoIPC() {
-            setDemoHeader('IPC', '验证信号量 P/V、消息队列和共享内存。');
+            setDemoHeader('IPC', '验证最新版 IPC：信号量 P/V 阻塞唤醒、消息邮箱、共享内存，以及与进程状态的联动。');
             const p1 = await demoCreateProcess('ipc_sender', 16, 2048, 10);
             const p2 = await demoCreateProcess('ipc_receiver', 16, 2048, 10);
             addDemoStep(1, 'create ipc_sender/ipc_receiver', '创建两个 IPC 测试进程。', 'done');
             await executeDemoSteps([
                 { cmd: 'sem_create sem_demo 1', desc: '创建初值为 1 的信号量。' },
                 { cmd: `P sem_demo ${p1 || 2}`, desc: 'P1 执行 P 操作，获得资源。' },
-                { cmd: `P sem_demo ${p2 || 3}`, desc: 'P2 执行 P 操作，资源不足则进入等待。' },
+                { cmd: `P sem_demo ${p2 || 3}`, desc: 'P2 执行 P 操作，资源不足则进入等待并阻塞。' },
+                { cmd: 'ps', desc: '查看 P/V 操作导致的进程状态变化。' },
                 { cmd: 'V sem_demo', desc: '执行 V 操作，释放资源并唤醒等待进程。' },
                 { cmd: `msg_send ${p1 || 2} ${p2 || 3} ${q('hello from ipc module')}`, desc: '发送消息到接收进程信箱。' },
                 { cmd: `msg_read ${p2 || 3}`, desc: '读取消息队列。' },
-                { cmd: `shm ${p1 || 2} ${p2 || 3} 1`, desc: '建立共享内存映射。' }
+                { cmd: `shm ${p1 || 2} ${p2 || 3} 1`, desc: '建立共享内存映射，验证 IPC 与内存模块接口联动。' },
+                { cmd: 'memstat', desc: '查看共享内存后的内存统计信息。' }
             ]);
         }
         async function demoIntegration() {
-            setDemoHeader('集成', '按“创建进程 → 内存访问 → 文件写入 → 设备申请 → IPC 通信 → 状态统计”的完整链路演示。');
+            setDemoHeader('集成', '按“MLFQ/SMP 进程 → 内存访问 → 文件落盘 → 设备申请 → IPC 通信 → 状态统计”的完整链路演示。');
             const idir = `integration_lab_${Date.now().toString().slice(-6)}`;
             const p1 = await demoCreateProcess('integrated_A', 20, 4096, 12);
             const p2 = await demoCreateProcess('integrated_B', 20, 4096, 10);
             addDemoStep(1, 'create integrated_A/integrated_B', '创建两个集成演示进程。', 'done');
             await executeDemoSteps([
+                { cmd: 'setsched mlfq', desc: '集成演示中启用 MLFQ 调度。' },
+                { cmd: `setpgid ${p1 || 2} 777`, desc: '设置进程组，验证 Job Control 字段贯穿状态快照。' },
                 { cmd: `access ${p1 || 2} 0x0`, desc: '触发内存访问和缺页/TLB 链路。' },
                 { cmd: `mkdir ${idir}`, desc: '创建集成演示目录。' },
                 { cmd: `cd ${idir}`, desc: '进入演示目录。' },
@@ -4286,25 +4379,75 @@
                 { cmd: 'sem_create integration_sem 1', desc: '创建同步信号量。' },
                 { cmd: `msg_send ${p1 || 2} ${p2 || 3} ${q('integrated message')}`, desc: '发送进程间消息。' },
                 { cmd: `msg_read ${p2 || 3}`, desc: '读取消息。' },
+                { cmd: 'write_at runtime.log 10 _patched_', desc: '执行偏移写入，验证文件系统修复后的保尾行为。' },
                 { cmd: 'stat runtime.log', desc: '查看文件系统落盘信息。' },
                 { cmd: 'cd ..', desc: '返回根目录。' },
                 { cmd: 'pstat', desc: '输出调度统计，完成集成验收。' }
             ]);
         }
 
+
+        function initConsoleResizeGrip() {
+            const c = byId('floatingConsole');
+            const grip = byId('consoleResizeGrip');
+            if (!c || !grip) return;
+            let resizing = false, sx = 0, sy = 0, sw = 0, sh = 0;
+            const start = (e) => {
+                if (c.classList.contains('minimized')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                resizing = true;
+                const r = c.getBoundingClientRect();
+                sx = e.clientX; sy = e.clientY; sw = r.width; sh = r.height;
+                grip.setPointerCapture?.(e.pointerId);
+                document.body.style.cursor = 'nwse-resize';
+                document.body.style.userSelect = 'none';
+            };
+            const move = (e) => {
+                if (!resizing) return;
+                e.preventDefault();
+                const r = c.getBoundingClientRect();
+                const safe = consoleRectSafe(r.left, r.top, sw + e.clientX - sx, sh + e.clientY - sy, false);
+                Object.assign(c.style, { width: safe.width + 'px', height: safe.height + 'px', left: safe.left + 'px', top: safe.top + 'px', right: 'auto', bottom: 'auto' });
+                c.dataset.restoreWidth = String(safe.width);
+                c.dataset.restoreHeight = String(safe.height);
+            };
+            const end = (e) => {
+                if (!resizing) return;
+                resizing = false;
+                try { grip.releasePointerCapture?.(e.pointerId); } catch (_) { }
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                saveConsoleDock();
+            };
+            grip.addEventListener('pointerdown', start);
+            grip.addEventListener('pointermove', move);
+            grip.addEventListener('pointerup', end);
+            grip.addEventListener('pointercancel', end);
+        }
+        async function runPastedCommands(raw) {
+            const lines = String(raw || '').replace(/\r/g, '').split('\n').map(x => x.trim()).filter(Boolean);
+            if (!lines.length) return;
+            appendTerm(`[Paste] 检测到 ${lines.length} 条命令，按顺序执行。`, '#b8b8c0');
+            for (const line of lines) {
+                await sendDirectCmd(line);
+                await sleep(120);
+            }
+        }
         initConsoleDock();
-        appendTerm('Visual kernel console loaded. Click Boot System or type help. Press Tab for autocomplete.', '#b8b8c0');
+        initConsoleResizeGrip();
+        appendTerm('Elaina OS 控制台已加载。可点击 Boot System 或输入 help；Tab 补全，上/下键切换历史命令。', '#b8b8c0');
         startStatusLoop();
 
 
         // 
-   // ===== Galgame 菜单控制逻辑 =====
+   // ===== 启动界面 菜单控制逻辑 =====
 
-    // 1. 开始：触发穿越动画并进入系统
+    // 1. 开始：触发启动过渡动画并进入系统
     document.getElementById('startBtn').addEventListener('click', function () {
         const screen = document.getElementById('startScreen');
 
-        // 播放穿越特效
+        // 播放启动过渡特效
         let flash = document.createElement('div');
         flash.id = 'whiteFlash';
         document.body.appendChild(flash);
@@ -4319,7 +4462,7 @@
         }, 1000);
     });
 
-    // 2. CG 鉴赏：可以弹出一个提示或者打开你的相册模块
+    // 2. 系统资料图：打开资料展示模块
     document.getElementById('cgBtn').addEventListener('click', function () {
         document.getElementById('cgModal').classList.add('active');
     });
@@ -4336,7 +4479,7 @@
         }
     });
     // =====================================// =====================================
-    // ===== CG 鉴赏专属控制函数 =====
+    // ===== 系统资料图展示控制函数 =====
         function closeCG() {
             document.getElementById('cgModal').classList.remove('active');
         }
@@ -4352,7 +4495,7 @@
             document.getElementById('cgViewer').classList.remove('active');
         }
     
-        // ===== 樱花鼠标拖尾特效控制 =====
+        // ===== 鼠标轨迹反馈特效控制 =====
             let lastMoveTime = 0;
 
             document.addEventListener('mousemove', function (e) {
@@ -4388,15 +4531,15 @@
                 // 4. 把花瓣加到网页里
                 document.body.appendChild(petal);
 
-                // 5. 动画结束后（1.2秒），把这个花瓣从内存中彻底删掉，防止网页变卡
+                // 5. 动画结束后（1.2秒），把这个花瓣从内存中彻底移除，防止网页变卡
                 setTimeout(() => {
                     petal.remove();
                 }, 1200);
             });
     
-            // ===== 樱花点击绽放特效控制 =====
+            // ===== 点击反馈特效控制 =====
                 document.addEventListener('click', function (e) {
-                    const numPetals = 6; // 每次点击炸开 6 片樱花
+                    const numPetals = 6; // 每次点击生成 6 个反馈粒子
 
                     for (let i = 0; i < numPetals; i++) {
                         const burst = document.createElement('div');
@@ -4433,12 +4576,89 @@
                         }, 800);
                     }
                 });
-        // ================= 语音识别与输入模块 =================
+
+                // ================= 【恢复】AI 与 语音识别模块 =================
+        const AI_API_URL = 'https://api.siliconflow.cn/v1/chat/completions';
+        const AI_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
+        
+        async function sendAiCommand() {
+            const aiInput = document.getElementById('aiInput');
+            const apiKey = document.getElementById('aiApiKey').value.trim();
+            const text = aiInput.value.trim();
+
+            if (!text) return;
+            if (!apiKey) {
+                appendTerm('[AI] 请先在输入框右侧填入 API Key。', '#ff9d98');
+                return;
+            }
+
+            appendTerm(`[AI 思考中] 分析意图: "${text}"`, '#e2a9ff');
+            aiInput.value = '';
+
+            const systemPrompt = `
+你是一个将自然语言翻译为 OS Simulator 终端命令的转换器。
+【严格规则】
+1. 只输出最终的命令本身，绝对不要解释，不要包含 Markdown 标记（如 \`\`\`）。
+2. 如果有多个命令，使用分号 (;) 分隔。
+3. mkdir 指令后必须跟一个空格，且文件夹名不要包含特殊字符。
+4. 只能使用以下系统支持的命令：
+   - 进程：create <name> <needTime> <mem> <pri>, kill <pid>, block <pid> <ticks> <reason>, wakeup <pid>, setsched <algo>
+   - 内存：setmem <FIFO|LRU|CLOCK>
+   - 文件：mkdir <dir>, cd <dir>, touch <file>, chmod <file> <ro|rw>, vim <file>
+   - IPC：sem_create <name> <init>, P <name> <pid>, V <name>
+【示例】
+输入：帮我建一个叫 demo 的目录，然后进去，接着用 vim 打开 config.txt
+输出：mkdir demo; cd demo; vim config.txt
+`;
+
+            try {
+                const response = await fetch(AI_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: AI_MODEL,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: text }
+                        ],
+                        temperature: 0.1
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP 错误: ${response.status}`);
+                
+                const data = await response.json();
+                if (data.choices && data.choices.length > 0) {
+                    let translatedCmd = data.choices[0].message.content.trim();
+                    translatedCmd = translatedCmd.replace(/```[a-zA-Z]*\n?/g, '').replace(/[`]/g, '');
+                    translatedCmd = translatedCmd.replace(/\r?\n/g, ' ');
+                    translatedCmd = translatedCmd.replace(/\s+/g, ' ').trim();
+                    
+                    appendTerm(`[AI 生成指令] ${translatedCmd}`, '#bf5af2');
+                    
+                    const cmds = translatedCmd.split(';').map(c => c.trim()).filter(Boolean);
+                    for (const cmd of cmds) {
+                        await sendDirectCmd(cmd); 
+                        await sleep(200); 
+                    }
+                } else {
+                    appendTerm('[AI] 返回格式异常。', '#ff9d98');
+                }
+            } catch (e) {
+                appendTerm(`[AI 请求失败] ${e.message}`, '#ff9d98');
+            }
+        }
+
         let recognition = null;
         let isListening = false;
+        // 恢复你自定义的音效文件
+        const sysAudio = new Audio('./sd.m4a'); 
+        sysAudio.volume = 0.6;
 
         function initSpeechRecognition() {
-            // 检查浏览器是否支持 Web Speech API (推荐使用 Chrome / Edge)
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 appendTerm('[系统] 您的浏览器不支持语音识别，推荐使用 Chrome 或 Edge。', '#ff9d98');
                 return false;
@@ -4446,40 +4666,30 @@
             
             const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRec();
-            recognition.lang = 'zh-CN'; // 设置识别语言为中文
-            recognition.interimResults = false; // 是否实时返回中间结果（设为 false 等说完一次性返回）
+            recognition.lang = 'zh-CN'; 
+            recognition.interimResults = false; 
             recognition.maxAlternatives = 1;
 
-            // 开始录音的回调
             recognition.onstart = function() {
                 isListening = true;
                 const btn = document.getElementById('voiceBtn');
-                btn.innerHTML = '🔴'; // 图标变成红点
-                btn.style.boxShadow = '0 0 12px #ff453a'; // 加上红光呼吸特效
+                btn.innerHTML = '🔴'; 
+                btn.style.boxShadow = '0 0 12px #ff453a'; 
                 btn.style.background = 'rgba(255, 69, 58, 0.2)';
                 appendTerm('[语音] 正在聆听，请对麦克风下达指令...', '#e2a9ff');
             };
 
-            // 识别成功的回调
             recognition.onresult = function(event) {
                 const transcript = event.results[0][0].transcript;
                 appendTerm(`[语音捕获] "${transcript}"`, '#9bd2ff');
-                
-                // 将听到的文字填入输入框
                 document.getElementById('aiInput').value = transcript;
                 
-                // ================= 【新增】播放收到语音的确认音效 =================
-                // 这里用了一个开源的充满科技感的电脑提示音，你也可以换成自己本地的文件，比如 './ding.mp3'
-                const audio = new Audio('./sd.m4a');
-                audio.volume = 1; // 设置音量为 60%，避免太大声吓到人
-                audio.play().catch(e => console.log('音效播放失败，可能被浏览器拦截:', e));
-                // ===============================================================
-
-                // 【核心联动】听完自动触发 AI 指令发送！
+                // 播放音效并执行指令
+                sysAudio.currentTime = 0;
+                sysAudio.play().catch(e => console.log('音效播放失败:', e));
                 sendAiCommand(); 
             };
 
-            // 发生错误的回调
             recognition.onerror = function(event) {
                 if(event.error !== 'no-speech') {
                     appendTerm(`[语音报错] 识别失败: ${event.error}`, '#ff9d98');
@@ -4487,7 +4697,6 @@
                 resetVoiceBtn();
             };
 
-            // 录音结束的回调
             recognition.onend = function() {
                 resetVoiceBtn();
             };
@@ -4495,30 +4704,37 @@
             return true;
         }
 
-        // 恢复麦克风按钮的 UI 状态
         function resetVoiceBtn() {
             isListening = false;
             const btn = document.getElementById('voiceBtn');
-            btn.innerHTML = '🎤';
-            btn.style.boxShadow = 'none';
-            btn.style.background = 'var(--purple-soft)';
+            if (btn) {
+                btn.innerHTML = '🎤';
+                btn.style.boxShadow = 'none';
+                btn.style.background = 'var(--purple-soft)';
+            }
         }
 
-        // 按钮点击事件处理
         function toggleVoiceInput() {
+            // 点击瞬间解锁浏览器音频播放限制
+            sysAudio.play().then(() => {
+                sysAudio.pause();
+                sysAudio.currentTime = 0;
+            }).catch(e => {});
+
             if (!recognition) {
                 if (!initSpeechRecognition()) return;
             }
             if (isListening) {
-                recognition.stop(); // 如果正在听，点击就手动停止
+                recognition.stop(); 
             } else {
                 try {
-                    recognition.start(); // 开启麦克风
+                    recognition.start(); 
                 } catch (e) {
                     appendTerm('[系统] 麦克风启动频繁，请稍后再试。', '#ff9d98');
                 }
             }
         }
+        // =======================================================
     </script>
 </body>
 

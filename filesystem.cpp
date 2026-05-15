@@ -463,7 +463,10 @@ int FileSystem::write_file(const std::string &filename, const std::string &data,
 
     if (written > 0)
     {
-        file_inode.i_size = offset + written;
+        if (offset == 0)
+            file_inode.i_size = offset + written;              // 普通 write：覆盖并截断
+        else
+            file_inode.i_size = std::max(old_size, offset + written); // write_at：保留尾部
         get_disk_manager().write_inode(file_ino, file_inode);
         std::cout << "[文件系统] 成功写入 " << written << " 字节到 " << filename << "\n";
     }

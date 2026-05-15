@@ -1,6 +1,7 @@
 // os_sim_main.cpp - OS Simulator Web Kernel Entry
 // 修订版：移除开机自动格式化逻辑，确保文件持久化。
 // 增加进程管理扩展：fork, wait, exit, ptree, 僵尸进程回收与进程树结构。
+// [新增] 包含5项高级特性：MLFQ调度支持、SMP多核前端兼容、软中断信号投递、ulimit资源限制、进程组(PGID)管控。
 
 #include <algorithm>
 #include <chrono>
@@ -18,6 +19,23 @@
 #include <thread>
 #include <vector>
 
+#ifdef __CYGWIN__
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <limits.h>
+#include <cstdlib>
+#endif
+
 #include "httplib.h"
 #include "json.hpp"
 
@@ -27,6 +45,20 @@
 #include "process/ipc.h"
 #include "filesystem.h"
 #include <csignal> // 用于捕捉 Ctrl+C
+
+// ==================== [高级功能扩展开关] ====================
+// ⚠️ 警告：要使下面四大功能完全生效，请在 program.h 中的 PCB 结构体内加入以下字段：
+// int pgid = 0; 
+// int maxChildrenLimit = 999;
+// std::deque<int> pendingSignals;
+// int queueLevel = 0;
+// 添加完毕后，将此宏设为 1 即可启用新的命令行功能。
+#define ENABLE_EXTENDED_PCB 1
+
+#ifndef SCHED_MLFQ
+#define SCHED_MLFQ 4 // 定义 MLFQ 调度算法的编号
+#endif
+// ==========================================================
 
 using json = nlohmann::json;
 
@@ -341,6 +373,18 @@ namespace
         p["blockReason"] = pcb.blockReason;
         p["admitted"] = pcb.admitted;
         p["parentPID"] = pcb.parentPID; // 暴露父进程PID以便前端展示
+
+        // --- 5项新功能扩展字段输出 ---
+        #if ENABLE_EXTENDED_PCB
+        p["pgid"] = pcb.pgid;
+        p["maxChildrenLimit"] = pcb.maxChildrenLimit;
+        p["queueLevel"] = pcb.queueLevel;
+        p["pendingSignals"] = json::array();
+        for(int sig : pcb.pendingSignals) {
+            p["pendingSignals"].push_back(sig);
+        }
+        #endif
+
         return p;
     }
 
@@ -537,7 +581,13 @@ namespace
         json j;
         j["booted"] = is_booted;
         j["nowTime"] = nowTime;
-        j["currentAlgo"] = getScheduleAlgorithmName();
+        
+        // 兼容输出新的算法名称
+        if (currentScheduleAlgo == SCHED_MLFQ) {
+            j["currentAlgo"] = "MLFQ (Multi-Level Feedback)";
+        } else {
+            j["currentAlgo"] = getScheduleAlgorithmName();
+        }
         j["currentAlgoCode"] = currentScheduleAlgo;
 
         j["memoryBitmap"] = mem_manager.get_memory_bitmap();
@@ -597,18 +647,44 @@ namespace
             j["messages"].push_back(mb);
         }
 
-        if (currentRunningPID != -1 && proMap.find(currentRunningPID) != proMap.end())
-        {
-            j["runningProcess"] = pcb_to_json(proMap[currentRunningPID]);
+        // ================= [功能升级] SMP 多核状态兼容层 =================
+        // 这里通过一个 currentCores 数组桥接。当您的底层 program.cpp 完成多核改造后，
+        // 只需将 currentCores = {currentRunningPID} 替换为您底层的 runningPIDs 数组即可。
+        std::vector<int> currentCores;
+        for (int i = 0; i < MAX_CORES; ++i) currentCores.push_back(cpuCores[i]);
+        j["cores"] = json::array();
+        j["runningProcesses"] = json::array();
+        for (int i = 0; i < static_cast<int>(currentCores.size()); ++i) {
+            int rpid = currentCores[i];
+            json core;
+            core["coreId"] = i;
+            core["pid"] = rpid;
+            if (rpid != -1 && proMap.find(rpid) != proMap.end()) {
+                core["process"] = pcb_to_json(proMap[rpid]);
+                j["runningProcesses"].push_back(pcb_to_json(proMap[rpid]));
+            } else {
+                core["process"] = nullptr;
+            }
+            j["cores"].push_back(core);
         }
-        else
-        {
+        // 为了兼容旧版前端不报错，保留单核的 runningProcess 字段
+        if (!j["runningProcesses"].empty()) {
+            j["runningProcess"] = j["runningProcesses"][0];
+        } else {
             j["runningProcess"] = nullptr;
         }
+        // ==============================================================
 
         j["readyQueue"] = json::array();
         for (const auto &pcb : readVector)
             j["readyQueue"].push_back(pcb_to_json(pcb));
+
+        j["mlfqQueues"] = json::array();
+        for (int level = 0; level < MLFQ_LEVELS; ++level) {
+            json q = json::array();
+            for (const auto &pcb : readQueues[level]) q.push_back(pcb_to_json(pcb));
+            j["mlfqQueues"].push_back(q);
+        }
 
         j["blockQueue"] = json::array();
         for (const auto &pcb : blockVector)
@@ -647,11 +723,15 @@ namespace
   wait <pid>                                        让父进程回收已死子进程，若无子进程死则阻塞
   exit <pid> / kill <pid>                           终止进程(有子进程则过继给 PID 1)
   ptree                                             打印系统进程族谱树
-  block <pid> [ticks] [reason]                      阻塞进程
+  block <pid> [ticks] [reason]                      阻塞进程，ticks<=0为手动阻塞
   wakeup <pid>                                      唤醒阻塞进程
   suspend <pid>                                     挂起进程并释放内存
   resume <pid>                                      恢复挂起进程
-  setsched <0|1|2|3|priority|sjf|fcfs|hrrn>          切换调度算法
+  setsched <0|1|2|3|4|priority|sjf|fcfs|hrrn|mlfq>  切换调度算法(支持MLFQ)
+  signal <pid> <signum>                             [新] 投递软中断信号
+  ulimit <pid> <max_children>                       [新] 限制最大子进程数
+  setpgid <pid> <pgid>                              [新] 设置进程组ID
+  killgroup <pgid>                                  [新] 终止整个进程组
   ps / queues                                       查看所有进程队列
   pinfo <pid>                                       查看单个进程详情
   pstat                                             查看调度统计
@@ -799,11 +879,38 @@ namespace
                 algo = SCHED_FCFS;
             else if (a == "3" || a == "hrrn")
                 algo = SCHED_HRRN;
+            // -- [新功能] 切换到 MLFQ --
+            else if (a == "4" || a == "mlfq")
+                algo = SCHED_MLFQ;
             else
                 throw std::invalid_argument("unknown scheduling algorithm");
             setScheduleAlgorithm(algo);
-            out << "调度算法已切换为: " << getScheduleAlgorithmName();
+            out << "调度算法已切换为: " << (algo == SCHED_MLFQ ? "MLFQ" : getScheduleAlgorithmName());
         }
+        // ------------- [新功能] 软中断信号 -------------
+        else if ((action == "signal" || action == "sig" || action == "send_signal") && args.size() >= 3) {
+            int pid = parse_int(args[1]);
+            int sig = parse_int(args[2]);
+            out << (sendSignal(pid, sig) ? "[软中断] 成功向 PID " : "[软中断] 投递失败: PID ") << pid << ", signal=" << sig;
+        }
+        // ------------- [新功能] ulimit 资源限制 -------------
+        else if (action == "ulimit" && args.size() >= 3) {
+            int pid = parse_int(args[1]);
+            int limit = parse_int(args[2]);
+            out << (setMaxChildrenLimit(pid, limit) ? "[资源控制] 成功设置 PID " : "[资源控制] 设置失败: PID ") << pid << " maxChildren=" << limit;
+        }
+        // ------------- [新功能] 进程组 (Job Control) -------------
+        else if (action == "setpgid" && args.size() >= 3) {
+            int pid = parse_int(args[1]);
+            int pgid = parse_int(args[2]);
+            out << (setProcessGroup(pid, pgid) ? "[Job Control] 成功设置 PID " : "[Job Control] 设置失败: PID ") << pid << " PGID=" << pgid;
+        }
+        else if (action == "killgroup" && args.size() >= 2) {
+            int pgid = parse_int(args[1]);
+            int count = killGroup(pgid);
+            out << "[Job Control] 已向 PGID " << pgid << " 发送终止指令，共结束 " << count << " 个进程";
+        }
+        // ---------------------------------------------------------
         else if (action == "ps" || action == "queues")
         {
             out << capture_stdout([]()
@@ -1051,7 +1158,7 @@ else if (action == "tar" && args.size() >= 3) {
                     int ratio = 100 - (real_binary_size * 100 / original_size);
                     
                     if (ratio >= 0) {
-                        out << "tar: 成功打包并压缩文件到 " << archive << " (真实体积减少了 " << ratio << "%)，好耶！";
+                        out << "tar: 成功打包并压缩文件到 " << archive << "，体积约减少 " << ratio << "%";
                     } else {
                         out << "tar: 成功打包到 " << archive << " (体积反向膨胀了 " << -ratio << "%，因为文件实在太小了！)";
                     }
@@ -1275,16 +1382,16 @@ void start_http_server()
         boot_if_needed();
 
         response_json["logs"] = {
-            "[0.000000] Booting OS Simulator Kernel v1.0.0...",
+            "[0.000000] Booting OS Simulator Kernel v2.0 (Extended Edition)...",
             "[0.012030] Power-On Self-Test (POST) ... [OK]",
-            "[0.034010] Initializing Memory Management Unit (MMU) ... [OK]",
-            "[0.051200] Scanning Physical RAM: 32 Pages ... [OK]",
+            "[0.034010] Initializing SMP/Multi-Core Management ... [OK]",
+            "[0.051200] Initializing MLFQ Scheduler Support ... [OK]",
             "[0.082300] Initializing Disk Subsystem ... [OK]",
             "[0.104500] Mounting virtual disk 'vdisk.bin' ... [OK]",
             "[0.125000] Checking Superblock & Inode Bitmap ... [OK]",
             "[0.156000] Loading File System drivers ... [OK]",
-            "[0.180000] Initializing Process Manager ... [OK]",
-            "[0.201000] Starting CPU Scheduler (Algorithm: Priority + RR) ... [OK]",
+            "[0.180000] Initializing Process Manager (Job Control & Limits enabled) ... [OK]",
+            "[0.201000] Starting CPU Scheduler ... [OK]",
             "[0.223000] Creating [idle] process ... [OK]",
             "[0.254000] Creating [init] process ... [OK]",
             "[0.280000] Initializing I/O Controllers (Printer, Keyboard, Disk) ... [OK]",
@@ -1365,9 +1472,16 @@ void start_http_server()
             res.set_content(json({ {"status", "error"}, {"msg", std::string("解析或执行错误: ") + e.what()} }).dump(), "application/json; charset=utf-8");
         } });
 
+    int port = 8080;
+    const char* port_env = std::getenv("OS_SIM_PORT");
+    if (port_env && *port_env) {
+        try { port = std::stoi(port_env); } catch (...) { port = 8080; }
+    }
     std::cout << "[OS Kernel] 内核服务已就绪。等待开机指令..." << std::endl;
-    std::cout << "监听端口: 8080" << std::endl;
-    svr.listen("0.0.0.0", 8080);
+    std::cout << "监听端口: " << port << std::endl;
+    if (!svr.listen("0.0.0.0", port)) {
+        std::cerr << "[OS Kernel] 监听端口失败: " << port << "，请检查端口是否被占用。" << std::endl;
+    }
 
     global_svr = nullptr; // 服务器停止后置空
 }

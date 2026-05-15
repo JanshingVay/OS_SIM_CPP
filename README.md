@@ -1,190 +1,83 @@
-# OS_SIM_CPP 操作系统课程设计
+# 操作系统课程设计最终提交包
 
-OS_SIM_CPP 是一个用 C++ 实现的操作系统原型模拟器，面向操作系统课程设计验收。项目通过 Web 前端、HTTP API 和命令解释器，把进程管理、内存管理、文件系统、磁盘持久化、设备管理和 IPC 组合成一个可演示的小型 OS 模拟环境。
+本项目为操作系统课程设计最终验收版本，采用 C++ 与单页 Web 前端实现操作系统原型模拟。系统围绕课程要求集成了进程管理、分页内存管理、文件系统、虚拟磁盘、设备管理、IPC 和可视化前端展示。根目录下的 `index.html` 与 `vimplus.html` 均为最终前端页面，运行主程序后可通过浏览器进行完整演示。
 
-## 功能概览
+## 提交材料
 
-- 进程管理：PCB、进程创建/终止、阻塞/唤醒、挂起/恢复、父子进程、僵尸进程回收、进程树、队列状态展示。
-- 调度算法：动态优先级 + 时间片轮转、SJF、FCFS、HRRN，可运行时切换。
-- 内存管理：分页式虚拟内存、页表、TLB、缺页中断、FIFO/LRU/CLOCK 页面置换、共享内存、动态扩缩容。
-- 文件系统：基于虚拟磁盘 `vdisk.bin` 的 inode 文件系统，支持目录、文件、读写、偏移读写、权限、重命名、复制、搜索和打包。
-- 磁盘管理：块设备模拟、inode 位图、数据块位图、数据块读写、格式化和持久化。
-- 设备与 IPC：I/O 设备申请与释放、银行家算法安全检查、信号量 P/V 操作、进程消息邮箱。
-- 前端交互：启动动画、状态面板、命令行、文件查看、Vim 风格编辑入口、页面功能和视觉优化。
+| 类别 | 包内位置 | 说明 |
+|---|---|---|
+| 源代码 | `*.cpp`、`*.h`、`memory/`、`process/` | 主程序、文件系统、磁盘、内存、进程、设备、IPC 等模块源码 |
+| 前端页面 | `index.html`、`vimplus.html` | 终端、系统状态面板、进程/内存/文件/设备/IPC 可视化演示界面 |
+| 正式文档 | `docs/*.docx` | 课程设计报告、测试结果、验收流程、会议纪要、分工贡献、成员模块说明等 |
+| 自动测试 | `test_*.cpp`、`test_*.py` | 单元测试、集成测试、前端覆盖测试和 HTTP 功能测试 |
+| Windows 脚本 | `*.bat` | Windows 环境构建、运行、测试与成员模块演示入口 |
+| Linux 脚本 | `*.sh` | Linux 环境构建、运行、测试与成员模块演示入口 |
+| 成员独立模块 | `pre_integration/` | 每位成员独立展示材料、自动化测试脚本与前端快照 |
+| 构建输出目录 | `bin/`、`test_logs/` | 可执行程序输出目录与测试日志目录 |
 
-## 目录结构
+## 功能覆盖
 
-```text
-.
-├── os_sim_main.cpp          # 集成主程序，HTTP 服务和命令分发
-├── index.html               # Web 前端页面
-├── vimplus.html             # Vim 风格编辑页面
-├── process/                 # 进程、设备、IPC 模块
-├── memory/                  # 内存管理/MMU 模块
-├── disk.cpp / disk.h        # 虚拟磁盘模块
-├── filesystem.cpp / .h      # 文件系统模块
-├── test_fs.cpp              # 文件系统和磁盘测试
-├── test_disk_memory.cpp     # 磁盘和内存集成测试
-├── test_os_pressure.py      # HTTP 并发压力测试脚本
-├── os_memory_config.txt     # 内存模块配置
-└── docs/                    # 课程验收文档
+### 进程管理
+实现进程创建、终止、父子进程 `fork/wait`、PCB 信息展示、进程树、就绪/运行/阻塞/挂起/完成队列迁移、时间片与优先级属性、调度统计、进程组、信号处理和资源限制。调度策略支持 `priority`、`fcfs`、`sjf`、`hrrn`、`mlfq` 等。前端提供创建、阻塞、唤醒、挂起、恢复、终止、调度切换和队列查看入口。
+
+### 内存管理
+实现分页式虚拟内存、二级页表、TLB、缺页中断、页面置换、Swap、地址访问、地址转换、动态扩缩容和共享内存。页面置换支持 FIFO、LRU、CLOCK。物理页框采用按需堆空间申请：页面装入时通过 `new unsigned char[PAGE_SIZE]` 申请真实主机内存，页面换出或进程释放时通过 `delete[]` 回收。该实现已同步到主工程和 `pre_integration` 中 03、04 成员的独立展示模块。
+
+### 文件系统与虚拟磁盘
+实现虚拟磁盘块管理、文件与目录创建删除、路径切换、读写、随机读写、权限修改、文件属性查看、重命名、复制、全文检索、打包/解包、目录树、格式化和 Vim 风格编辑。前端文件区可查看目录、文件内容、inode、权限和数据块信息。
+
+### 设备管理与 IPC
+实现设备申请/释放、设备等待队列、I/O 阻塞与唤醒、银行家算法安全性检查、信号量 P/V、消息邮箱发送/读取和共享内存入口。前端提供设备状态、等待队列、银行家矩阵、信号量表和消息队列可视化。
+
+### 前端展示
+前端通过 HTTP API 调用后端命令并刷新系统状态。页面覆盖进程队列、内存页框、TLB/缺页统计、文件系统、设备分配、银行家算法、IPC、终端命令、模块验收演示台和运行过程小游戏。小游戏用于可视化系统运行过程，不影响后端核心逻辑。
+
+## Windows 运行方式
+
+```bat
+00_BUILD_ALL_WINDOWS.bat
+01_RUN_ALL_TESTS_WINDOWS.bat
+02_RUN_OS_WINDOWS.bat
+03_RUN_ALL_MEMBER_MODULE_TESTS_WINDOWS.bat
 ```
 
-## 环境要求
+成员独立模块菜单：
 
-- C++ 编译器：支持 C++14，推荐 Linux g++ 或 Cygwin/MinGW g++。
-- 线程库：需要 `pthread`。
-- 浏览器：用于访问 Web 前端。
-- Python 3：仅在运行 `test_os_pressure.py` 压力测试时需要。
+```bat
+pre_integration\RUN_INTERACTIVE_DEMO_MENU_WINDOWS.bat
+```
 
-## 编译
-
-主程序：
+## Linux 运行方式
 
 ```bash
-g++ -O2 -std=c++14 -D_DEFAULT_SOURCE \
-    os_sim_main.cpp \
-    memory/memory.cpp \
-    process/program.cpp \
-    process/device.cpp \
-    process/ipc.cpp \
-    filesystem.cpp \
-    disk.cpp \
-    -o os_simulator \
-    -pthread
+bash 00_BUILD_ALL_LINUX.sh
+bash 01_RUN_ALL_TESTS_LINUX.sh
+bash 02_RUN_OS_LINUX.sh
+bash 03_RUN_ALL_MEMBER_MODULE_TESTS_LINUX.sh
 ```
 
-文件系统测试：
+成员独立模块菜单：
 
 ```bash
-g++ -O2 -std=c++11 test_fs.cpp filesystem.cpp disk.cpp -o run_fs_test -pthread
+cd pre_integration
+bash RUN_INTERACTIVE_DEMO_MENU_LINUX.sh
 ```
 
-磁盘和内存测试：
+主程序默认监听 `http://127.0.0.1:8080/`。如需指定端口，可使用：
 
 ```bash
-g++ -O2 -std=c++11 \
-    disk.cpp \
-    memory/memory.cpp \
-    test_disk_memory.cpp \
-    -o os_sim_test_disk_memory \
-    -pthread
-```
-磁盘压测：
-
-```bash
-# 编译
-g++ -std=c++17 -O2 -Wall -Wextra -pthread -o bench_disk bench_disk.cpp disk.cpp
-
-# 运行
-./bench_disk
+OS_SIM_PORT=8090 ./bin/os_simulator_linux
 ```
 
+## 验收演示建议
 
-说明：在部分 Cygwin 环境中，`httplib.h` 需要 `-D_DEFAULT_SOURCE` 才能正确暴露 socket/addrinfo 相关声明。
+1. 启动主程序并打开前端，展示系统启动、终端和状态刷新。
+2. 创建不少于 3 个进程，演示调度算法切换、队列迁移和进程树。
+3. 演示分页内存访问、地址转换、TLB/缺页统计、页面置换和共享内存。
+4. 演示文件和目录操作、权限修改、复制、检索、打包/解包和 Vim 编辑。
+5. 演示设备申请释放、等待队列、银行家算法矩阵、信号量和消息队列。
+6. 运行自动化测试脚本，展示各模块测试结果。
 
-## 运行
+## 文档说明
 
-```bash
-./os_simulator
-```
-
-程序启动后监听：
-
-```text
-http://127.0.0.1:8080/
-```
-
-浏览器打开页面后点击开机，或直接通过命令接口执行系统命令。
-
-## 常用命令
-
-进程管理：
-
-```text
-create P1 8 4096 10
-create P2 6 2048 6
-setsched priority
-ps
-queues
-block 3 3 io_wait
-wakeup 3
-suspend 4
-resume 4
-fork 2
-wait 2
-kill 3
-ptree
-pstat
-resize 2 4096
-```
-
-内存管理：
-
-```text
-memstat
-setmem FIFO
-setmem LRU
-setmem CLOCK
-access 2 0x1000
-translate 2 0x1000
-shm 2 3 1
-memreset
-```
-
-文件系统：
-
-```text
-pwd
-ls
-mkdir docs
-cd docs
-touch readme.txt
-write readme.txt hello_os
-cat readme.txt
-read_at readme.txt 0 5
-write_at readme.txt 6 simulator
-chmod readme.txt ro
-stat readme.txt
-chmod readme.txt rw
-rename readme.txt note.txt
-tree
-vim note.txt
-```
-
-设备与 IPC：
-
-```text
-io 2 0
-release 2
-sem_create mutex 1
-P mutex 2
-V mutex
-msg_send 2 3 hello
-msg_read 3
-```
-
-## 测试
-
-```bash
-./run_fs_test
-./os_sim_test_disk_memory
-```
-
-压力测试需要先启动主程序：
-
-```bash
-python3 test_os_pressure.py
-```
-
-## 课程验收文档
-
-- [课程设计报告](docs/课程设计报告.md)
-- [验收演示流程](docs/验收演示流程.md)
-- [小组分工与贡献率](docs/小组分工与贡献率.md)
-- [会议纪要](docs/会议纪要.md)
-- [测试结果](docs/测试结果.md)
-
-## 小组分工
-
-本项目由五名成员协作完成，贡献率平均分配，每人 20%。具体分工见 `docs/小组分工与贡献率.md`。
+正式提交文档位于 `docs/`，采用中文文件名。文档内容覆盖问题描述、设计思路、数据结构、算法逻辑、功能实现、测试结果、结果分析、分工贡献和第十一周验收说明。
