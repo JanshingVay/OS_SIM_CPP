@@ -5,6 +5,9 @@
 #include <mutex>
 #include <vector>
 #include <cstring>
+#include <thread>
+#include <future>
+#include <condition_variable>
 
 // 页面/块大小为 1K
 #define BLOCK_SIZE 1024        
@@ -76,6 +79,29 @@ private:
     std::fstream disk_stream;
     std::mutex disk_mutex;
 
+    // ========== IO 调度器成员 ==========
+    struct IORequest {
+        int block_id;
+        bool is_write;
+        char* buffer;
+        std::promise<bool> done;
+
+        IORequest(int bid, bool wr, char* buf)
+            : block_id(bid), is_write(wr), buffer(buf) {}
+    };
+
+    bool _scheduler_running;
+    bool _scheduler_enabled;
+    int _head_position;
+    enum class Direction { UP, DOWN };
+    Direction _scheduler_direction;
+    std::vector<IORequest> _io_queue;
+    std::mutex _io_queue_mutex;
+    std::condition_variable _io_cv;
+    std::thread _scheduler_thread;
+
+    void _scheduler_loop();
+
     bool _write_raw_block(int block_id, const char* buffer);
     bool _read_raw_block(int block_id, char* buffer);
     void _format_disk();
@@ -108,6 +134,10 @@ public:
 
     // 在 disk.h 的 public 下添加：
     void sync_disk();
+
+    // IO 调度器控制接口
+    void set_scheduler_enabled(bool enabled);
+    bool is_scheduler_enabled() const { return _scheduler_enabled; }
 
     int get_nth_block(const iNode& node, int n);
     int allocate_nth_block(iNode& node, int n);

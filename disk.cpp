@@ -21,9 +21,23 @@ DiskManager::DiskManager() {
     } else {
         std::cout << "[硬件层] 物理硬盘挂载成功: " << DISK_FILE_NAME << std::endl;
     }
+
+    _scheduler_running = true;
+    _scheduler_enabled = true;
+    _head_position = DATA_BLOCK_START;
+    _scheduler_direction = Direction::UP;
+    _scheduler_thread = std::thread(&DiskManager::_scheduler_loop, this);
 }
 
 DiskManager::~DiskManager() {
+    {
+        std::lock_guard<std::mutex> lock(_io_queue_mutex);
+        _scheduler_running = false;
+    }
+    _io_cv.notify_all();
+    if (_scheduler_thread.joinable()) {
+        _scheduler_thread.join();
+    }
     if (disk_stream.is_open()) disk_stream.close();
 }
 
@@ -187,15 +201,43 @@ bool DiskManager::write_inode(int inode_id, const iNode& in_inode) {
 }
 
 bool DiskManager::read_data_block(int block_id, char* buffer) {
-    std::lock_guard<std::mutex> lock(disk_mutex);
     if (block_id < DATA_BLOCK_START || block_id >= TOTAL_BLOCKS) return false;
-    return _read_raw_block(block_id, buffer);
+
+    if (!_scheduler_enabled) {
+        std::lock_guard<std::mutex> lock(disk_mutex);
+        return _read_raw_block(block_id, buffer);
+    }
+
+    IORequest req(block_id, false, buffer);
+    std::future<bool> fut = req.done.get_future();
+
+    {
+        std::lock_guard<std::mutex> lock(_io_queue_mutex);
+        _io_queue.push_back(std::move(req));
+    }
+    _io_cv.notify_one();
+
+    return fut.get();
 }
 
 bool DiskManager::write_data_block(int block_id, const char* buffer) {
-    std::lock_guard<std::mutex> lock(disk_mutex);
     if (block_id < DATA_BLOCK_START || block_id >= TOTAL_BLOCKS) return false;
-    return _write_raw_block(block_id, buffer);
+
+    if (!_scheduler_enabled) {
+        std::lock_guard<std::mutex> lock(disk_mutex);
+        return _write_raw_block(block_id, buffer);
+    }
+
+    IORequest req(block_id, true, const_cast<char*>(buffer));
+    std::future<bool> fut = req.done.get_future();
+
+    {
+        std::lock_guard<std::mutex> lock(_io_queue_mutex);
+        _io_queue.push_back(std::move(req));
+    }
+    _io_cv.notify_one();
+
+    return fut.get();
 }
 
 // 在 disk.cpp 文件末尾添加：
@@ -389,5 +431,108 @@ void DiskManager::free_all_data_blocks(iNode& node) {
     if (node.double_indirect != -1) {
         _free_double_indirect_chain(node.double_indirect);
         node.double_indirect = -1;
+    }
+}
+
+void DiskManager::_scheduler_loop() {
+    while (true) {
+        std::unique_lock<std::mutex> lock(_io_queue_mutex);
+        _io_cv.wait(lock, [this] {
+            return !_io_queue.empty() || !_scheduler_running;
+        });
+
+        if (_io_queue.empty()) {
+            if (!_scheduler_running) break;
+            continue;
+        }
+
+        int best_idx = -1;
+        int best_dist = TOTAL_BLOCKS * 2;
+
+        for (int i = 0; i < (int)_io_queue.size(); ++i) {
+            int dist;
+            if (_scheduler_direction == Direction::UP) {
+                dist = _io_queue[i].block_id - _head_position;
+                if (dist < 0) dist = TOTAL_BLOCKS * 2 + dist;
+            } else {
+                dist = _head_position - _io_queue[i].block_id;
+                if (dist < 0) dist = TOTAL_BLOCKS * 2 + dist;
+            }
+            if (dist >= 0 && dist < best_dist) {
+                best_dist = dist;
+                best_idx = i;
+            }
+        }
+
+        if (best_idx == -1) {
+            _scheduler_direction = (_scheduler_direction == Direction::UP)
+                                 ? Direction::DOWN : Direction::UP;
+            for (int i = 0; i < (int)_io_queue.size(); ++i) {
+                int dist;
+                if (_scheduler_direction == Direction::UP) {
+                    dist = _io_queue[i].block_id - _head_position;
+                    if (dist < 0) dist = TOTAL_BLOCKS * 2 + dist;
+                } else {
+                    dist = _head_position - _io_queue[i].block_id;
+                    if (dist < 0) dist = TOTAL_BLOCKS * 2 + dist;
+                }
+                if (dist >= 0 && dist < best_dist) {
+                    best_dist = dist;
+                    best_idx = i;
+                }
+            }
+        }
+
+        if (best_idx == -1) continue;
+
+        IORequest req = std::move(_io_queue[best_idx]);
+        _io_queue.erase(_io_queue.begin() + best_idx);
+        _head_position = req.block_id;
+
+        lock.unlock();
+
+        bool ok = false;
+        {
+            std::lock_guard<std::mutex> disk_lock(disk_mutex);
+            disk_stream.clear();
+            if (req.is_write) {
+                ok = _write_raw_block(req.block_id, req.buffer);
+            } else {
+                ok = _read_raw_block(req.block_id, req.buffer);
+            }
+        }
+        req.done.set_value(ok);
+    }
+
+    while (true) {
+        std::unique_lock<std::mutex> lock(_io_queue_mutex);
+        if (_io_queue.empty()) return;
+
+        IORequest req = std::move(_io_queue.back());
+        _io_queue.pop_back();
+        _head_position = req.block_id;
+
+        lock.unlock();
+
+        bool ok = false;
+        {
+            std::lock_guard<std::mutex> disk_lock(disk_mutex);
+            disk_stream.clear();
+            if (req.is_write) {
+                ok = _write_raw_block(req.block_id, req.buffer);
+            } else {
+                ok = _read_raw_block(req.block_id, req.buffer);
+            }
+        }
+        req.done.set_value(ok);
+    }
+}
+
+void DiskManager::set_scheduler_enabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(_io_queue_mutex);
+    _scheduler_enabled = enabled;
+    if (!enabled && !_io_queue.empty()) {
+        std::cout << "[IO调度器] 已关闭，队列尚有 " << _io_queue.size()
+                  << " 个待处理请求，将直接执行。" << std::endl;
     }
 }
