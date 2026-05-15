@@ -70,6 +70,16 @@ g++ -O2 -std=c++11 \
     -o os_sim_test_disk_memory \
     -pthread
 ```
+磁盘压测：
+
+```bash
+# 编译
+g++ -std=c++17 -O2 -Wall -Wextra -pthread -o bench_disk bench_disk.cpp disk.cpp
+
+# 运行
+./bench_disk
+```
+
 
 说明：在部分 Cygwin 环境中，`httplib.h` 需要 `-D_DEFAULT_SOURCE` 才能正确暴露 socket/addrinfo 相关声明。
 
