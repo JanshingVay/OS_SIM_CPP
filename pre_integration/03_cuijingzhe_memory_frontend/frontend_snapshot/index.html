@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elaina OS Dashboard</title>
+  <style>
+    :root {
+      --bg: #151521;
+      --panel: #232334;
+      --panel2: #2d2d42;
+      --text: #e8e8ef;
+      --muted: #9aa0b4;
+      --line: #3f4058;
+      --green: #4caf50;
+      --red: #f44336;
+      --blue: #03a9f4;
+      --yellow: #ffc107;
+      --purple: #8b5cf6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #222239, var(--bg));
+      color: var(--text);
+      font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+      overflow: hidden;
+    }
+    .boot-screen {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .power-btn {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 2px solid var(--green);
+      background: transparent;
+      color: var(--green);
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(76,175,80,0.8);
+      font-family: inherit;
+      transition: 0.2s;
+    }
+    .power-btn:hover { background: var(--green); color: #000; box-shadow: 0 0 55px rgba(76,175,80,0.95); }
+    .boot-terminal { display:none; width: 84vw; height: 82vh; color: #0f0; overflow: hidden; line-height: 1.45; }
+    .app { display:none; opacity:0; height:100vh; padding:14px; flex-direction:column; gap:12px; transition: opacity .5s; }
+    .header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 16px;
+      background: rgba(35,35,52,.85);
+      border:1px solid var(--line);
+      border-radius:12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.25);
+    }
+    .header h1 { margin:0; font-size:1.25rem; }
+    .header .sub { color:var(--muted); font-size:.82rem; margin-top:4px; }
+    .top-stats { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+    .pill { padding:7px 10px; border-radius:999px; background:#1b1b2a; border:1px solid var(--line); font-size:.85rem; }
+    .value { color:var(--green); font-weight:bold; }
+    .layout {
+      flex:1;
+      min-height:0;
+      display:grid;
+      grid-template-columns: 1.13fr 1.1fr 1.25fr;
+      gap:12px;
+    }
+    .col { min-height:0; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:12px; }
+    .panel {
+      background: rgba(35,35,52,.96);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:13px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.25);
+    }
+    .panel h2 { margin:0 0 10px; font-size:1rem; color:#fff; display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .panel h3 { margin:12px 0 7px; font-size:.88rem; color:#d7daf0; }
+    .row { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .grid3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+    .stat { background:#1c1c2d; border:1px solid #363750; padding:8px 10px; border-radius:8px; display:flex; justify-content:space-between; gap:8px; font-size:.86rem; }
+    .small { font-size:.78rem; color:var(--muted); }
+    input, select, textarea {
+      background:#151522;
+      color:var(--text);
+      border:1px solid #555872;
+      border-radius:6px;
+      padding:7px 8px;
+      font-family:inherit;
+      outline:none;
+    }
+    input:focus, select:focus, textarea:focus { border-color:var(--blue); }
+    input.xs { width:54px; } input.sm { width:74px; } input.md { width:105px; } input.lg { width:160px; }
+    textarea { width:100%; min-height:54px; resize:vertical; }
+    button {
+      border:0;
+      border-radius:7px;
+      padding:7px 10px;
+      color:#fff;
+      background:#3f51b5;
+      cursor:pointer;
+      font-family:inherit;
+      font-weight:bold;
+      transition:.15s;
+    }
+    button:hover { filter:brightness(1.15); transform: translateY(-1px); }
+    .btn-green { background:var(--green); } .btn-red { background:var(--red); } .btn-blue { background:var(--blue); } .btn-yellow { background:#ff9800; } .btn-purple { background:var(--purple); }
+    table { width:100%; border-collapse:collapse; font-size:.82rem; }
+    th, td { padding:6px 7px; border-bottom:1px solid #3b3c55; text-align:left; vertical-align:top; }
+    th { background:#303048; color:#fff; position:sticky; top:0; z-index:1; }
+    .table-wrap { max-height:215px; overflow:auto; border:1px solid #35364d; border-radius:8px; }
+    .memory-grid { display:grid; grid-template-columns:repeat(8, 1fr); gap:5px; }
+    .mem-block { height:28px; border-radius:6px; background:#2e7d32; color:#fff; font-size:.72rem; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+    .mem-block.used { background:#c62828; }
+    .mem-block.active { outline:2px solid var(--yellow); }
+    .file-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; }
+    .file-item { background:#1c1c2d; border:1px solid #363750; border-left:4px solid var(--blue); border-radius:9px; padding:8px; cursor:pointer; }
+    .file-item.dir { border-left-color:var(--yellow); }
+    .file-item:hover { border-color:var(--blue); }
+    .file-actions { margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
+    .detail-box { background:#1c1c2d; border:1px solid #363750; border-radius:9px; padding:8px; margin-top:8px; font-size:.85rem; }
+    .device-card { background:#1c1c2d; border:1px solid #363750; border-left:4px solid var(--green); border-radius:10px; padding:9px; margin-bottom:8px; }
+    .device-card.busy { border-left-color:var(--red); }
+    .term { flex:1; min-height:260px; display:flex; flex-direction:column; background:#050507; border-radius:10px; border:1px solid #333; padding:10px; }
+    .term-out { flex:1; min-height:180px; overflow:auto; color:#0f0; line-height:1.45; white-space:pre-wrap; font-size:.84rem; }
+    .term-line { display:flex; gap:7px; align-items:center; margin-top:9px; }
+    .term-line input { flex:1; color:#0f0; border-color:#333; background:#101015; }
+    .badge { display:inline-block; padding:2px 6px; border-radius:999px; background:#33334d; color:#dfe2ff; font-size:.72rem; }
+    .ok { color:var(--green); } .bad { color:var(--red); } .warn { color:var(--yellow); } .info { color:var(--blue); }
+    details { background:#1c1c2d; border:1px solid #363750; border-radius:8px; padding:8px; }
+    summary { cursor:pointer; font-weight:bold; }
+    code { color:#d4f7d4; background:#151522; padding:1px 4px; border-radius:4px; }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-thumb { background:#555872; border-radius:10px; }
+  </style>
+</head>
+<body>
+  <div id="bootScreen" class="boot-screen">
+    <button id="powerBtn" class="power-btn" onclick="startBoot()">
+      <div style="font-size:4rem; line-height:1;">⏻</div>
+      <div style="font-size:1.05rem; margin-top:8px;">Power On</div>
+    </button>
+    <div id="bootTerminal" class="boot-terminal"></div>
+  </div>
+
+  <main id="app" class="app">
+    <header class="header">
+      <div>
+        <h1>🚀 Elaina OS 核心可视化引擎</h1>
+        <div class="sub">进程调度 / 32 位分页 MMU / 文件系统 VFS / 银行家算法 / IPC 同步通信</div>
+      </div>
+      <div class="top-stats">
+        <div class="pill">Tick: <span id="nowTime" class="value">0</span></div>
+        <div class="pill">调度: <span id="currentAlgo" class="value info">未知</span></div>
+        <div class="pill">路径: <span id="cwd" class="value">/</span></div>
+        <div class="pill">进程数: <span id="processCount" class="value">0</span></div>
+      </div>
+    </header>
+
+    <section class="layout">
+      <div class="col">
+        <div class="panel">
+          <h2>🛠️ 进程创建与调度控制</h2>
+          <div class="row">
+            <input id="pName" class="md" placeholder="进程名" />
+            <input id="pTime" class="xs" type="number" placeholder="耗时" />
+            <input id="pMem" class="sm" type="number" placeholder="内存B" />
+            <input id="pPri" class="xs" type="number" placeholder="优先" />
+            <button class="btn-green" onclick="uiCreateProcess()">创建</button>
+          </div>
+          <h3>调度策略</h3>
+          <div class="row">
+            <button onclick="sendDirectCmd('setsched priority')">Priority+RR</button>
+            <button onclick="sendDirectCmd('setsched sjf')">SJF</button>
+            <button onclick="sendDirectCmd('setsched fcfs')">FCFS</button>
+            <button onclick="sendDirectCmd('setsched hrrn')">HRRN</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>🏃 运行/队列状态 <span class="small">覆盖运行、就绪、阻塞、挂起、完成队列</span></h2>
+          <div id="runningBox" class="stat"><span>当前运行</span><span class="value">无</span></div>
+          <h3>就绪队列</h3>
+          <div class="table-wrap"><table><thead><tr><th>PID</th><th>名称</th><th>余时</th><th>优先级</th><th>操作</th></tr></thead><tbody id="readyQueueBody"></tbody></table></div>
+          <h3>阻塞队列</h3>
+          <div class="table-wrap"><table><thead><tr><th>PID</th><th>名称</th><th>原因</th><th>操作</th></tr></thead><tbody id="blockQueueBody"></tbody></table></div>
+          <details style="margin-top:10px;">
+            <summary>挂起队列 / 完成队列 / 调度统计</summary>
+            <h3>挂起队列</h3>
+            <div class="table-wrap"><table><thead><tr><th>PID</th><th>名称</th><th>内存</th><th>操作</th></tr></thead><tbody id="suspendQueueBody"></tbody></table></div>
+            <h3>完成队列</h3>
+            <div class="table-wrap"><table><thead><tr><th>PID</th><th>名称</th><th>周转</th><th>带权</th></tr></thead><tbody id="finishedQueueBody"></tbody></table></div>
+            <div class="grid3" style="margin-top:8px;">
+              <div class="stat"><span>完成数</span><span id="finishedCount" class="value">0</span></div>
+              <div class="stat"><span>平均周转</span><span id="avgTurn" class="value">0</span></div>
+              <div class="stat"><span>平均响应</span><span id="avgResp" class="value">0</span></div>
+              <div class="stat"><span>平均带权周转</span><span id="avgWTurn" class="value">0</span></div>
+            </div>
+          </details>
+        </div>
+
+        <div class="panel">
+          <h2>🔧 进程直接操作</h2>
+          <div class="row">
+            <input id="opPid" class="sm" type="number" placeholder="PID" />
+            <input id="blockTicks" class="xs" type="number" placeholder="ticks" />
+            <input id="blockReason" class="md" placeholder="阻塞原因" />
+          </div>
+          <div class="row" style="margin-top:7px;">
+            <button class="btn-red" onclick="cmdWithPid('kill')">Kill</button>
+            <button class="btn-yellow" onclick="blockPid()">Block</button>
+            <button class="btn-green" onclick="cmdWithPid('wakeup')">Wakeup</button>
+            <button class="btn-purple" onclick="cmdWithPid('suspend')">Suspend</button>
+            <button class="btn-blue" onclick="cmdWithPid('resume')">Resume</button>
+            <button onclick="cmdWithPid('pinfo')">PInfo</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="panel">
+          <h2>🧠 MMU & TLB</h2>
+          <div class="grid2">
+            <div class="stat"><span>TLB 命中率</span><span id="tlbHitRate" class="value">0%</span></div>
+            <div class="stat"><span>缺页次数</span><span id="pageFaults" class="value bad">0</span></div>
+            <div class="stat"><span>内存访问</span><span id="memAccesses" class="value">0</span></div>
+            <div class="stat"><span>段错误</span><span id="segFaults" class="value bad">0</span></div>
+            <div class="stat"><span>页面命中</span><span id="pageHits" class="value">0</span></div>
+            <div class="stat"><span>置换算法</span><span id="replacementPolicy" class="value info">-</span></div>
+            <div class="stat"><span>物理页容量</span><span id="activePages" class="value">32</span></div>
+          </div>
+          <h3>物理内存 Bitmap</h3>
+          <div id="memoryGrid" class="memory-grid"></div>
+          <h3>内存操作</h3>
+          <div class="row">
+            <button onclick="sendDirectCmd('setmem FIFO')">FIFO</button>
+            <button onclick="sendDirectCmd('setmem LRU')">LRU</button>
+            <button onclick="sendDirectCmd('setmem CLOCK')">CLOCK</button>
+            <button class="btn-yellow" onclick="sendDirectCmd('memstat')">memstat</button>
+            <button class="btn-red" onclick="sendDirectCmd('memreset')">重置统计</button>
+          </div>
+          <div class="row" style="margin-top:7px;">
+            <input id="memPid" class="sm" type="number" placeholder="PID" />
+            <input id="memAddr" class="md" placeholder="逻辑地址 如0x1000" />
+            <button class="btn-blue" onclick="accessAddr()">Access</button>
+            <button onclick="translateAddr()">Translate</button>
+          </div>
+          <div class="row" style="margin-top:7px;">
+            <input id="resizePid" class="sm" type="number" placeholder="PID" />
+            <input id="resizeDelta" class="md" type="number" placeholder="deltaBytes" />
+            <button class="btn-purple" onclick="resizeProcess()">动态扩缩容</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>📂 虚拟文件系统 VFS <span class="small">支持 write/chmod/stat/rename/format</span></h2>
+          <div class="row">
+            <input id="fsName" class="md" placeholder="文件/目录名" />
+            <button class="btn-green" onclick="fsCmd('touch')">touch</button>
+            <button class="btn-yellow" onclick="fsCmd('mkdir')">mkdir</button>
+            <button class="btn-red" onclick="fsCmd('rm')">rm</button>
+            <button onclick="fsCmd('cat')">cat</button>
+            <button onclick="fsCmd('stat')">stat</button>
+            <button class="btn-blue" onclick="enterSelectedDir()">进入目录</button>
+          </div>
+          <div class="row" style="margin-top:7px;">
+            <button onclick="sendDirectCmd('cd ..')">返回上级 cd ..</button>
+            <button onclick="sendDirectCmd('pwd')">pwd</button>
+            <button onclick="sendDirectCmd('ls')">ls</button>
+            <button class="btn-blue" onclick="refreshAll()">刷新目录</button>
+          </div>
+          <div class="row" style="margin-top:7px;">
+            <input id="fsOld" class="md" placeholder="旧名" />
+            <input id="fsNew" class="md" placeholder="新名" />
+            <button class="btn-purple" onclick="renameFile()">rename</button>
+            <select id="fsMode"><option value="rw">可写 rw</option><option value="ro">只读 ro</option></select>
+            <button class="btn-blue" onclick="chmodFile()">chmod</button>
+          </div>
+          <div style="margin-top:7px;">
+            <textarea id="fsContent" placeholder="写入内容，配合 write 使用。可以包含空格。"></textarea>
+            <div class="row" style="margin-top:7px;">
+              <input id="fsWriteName" class="md" placeholder="目标文件" />
+              <input id="fsOffset" class="sm" type="number" placeholder="offset" />
+              <input id="fsReadLen" class="sm" type="number" placeholder="len" />
+              <button onclick="readAtFile()">read_at</button>
+              <button class="btn-green" onclick="writeFile(false)">write</button>
+              <button class="btn-blue" onclick="writeFile(true)">write_at</button>
+              <button class="btn-red" onclick="confirmFormat()">format</button>
+            </div>
+          </div>
+          <h3>当前目录文件</h3>
+          <div id="fileList" class="file-grid"><div class="small">加载中...</div></div>
+          <div id="fileDetail" class="detail-box small">点击文件或目录后，这里会显示 /api/file/&lt;name&gt; 返回的 inode、权限、数据块与内容。</div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="panel">
+          <h2>🖨️ 设备分配与银行家算法</h2>
+          <div id="deviceGrid"></div>
+          <div class="row">
+            <input id="devPid" class="sm" type="number" placeholder="PID" />
+            <input id="devId" class="xs" type="number" placeholder="设备ID" />
+            <button class="btn-yellow" onclick="requestDevice()">申请设备</button>
+            <button class="btn-red" onclick="releaseDevice()">释放该 PID 设备</button>
+          </div>
+          <h3>银行家矩阵</h3>
+          <div class="stat"><span>安全状态</span><span id="bankerSafe" class="value">未知</span></div>
+          <div id="bankerMatrix" style="margin-top:8px;"></div>
+        </div>
+
+        <div class="panel">
+          <h2>🔄 IPC 通信与同步</h2>
+          <div class="grid2">
+            <div>
+              <h3>信号量</h3>
+              <div id="semContainer" class="small">无</div>
+              <div class="row" style="margin-top:7px;">
+                <input id="semName" class="md" placeholder="sem名" />
+                <input id="semVal" class="xs" type="number" placeholder="初值" />
+                <button class="btn-green" onclick="createSem()">创建</button>
+              </div>
+              <div class="row" style="margin-top:7px;">
+                <input id="semPid" class="sm" type="number" placeholder="PID" />
+                <button class="btn-yellow" onclick="semP()">P</button>
+                <button class="btn-blue" onclick="semV()">V</button>
+              </div>
+            </div>
+            <div>
+              <h3>消息信箱</h3>
+              <div id="msgContainer" class="small">空</div>
+              <div class="row" style="margin-top:7px;">
+                <input id="msgFrom" class="xs" type="number" placeholder="from" />
+                <input id="msgTo" class="xs" type="number" placeholder="to" />
+              </div>
+              <textarea id="msgText" placeholder="消息内容"></textarea>
+              <div class="row" style="margin-top:7px;">
+                <button class="btn-green" onclick="sendMsg()">发送</button>
+                <input id="msgReadPid" class="sm" type="number" placeholder="读PID" />
+                <button onclick="readMsg()">读取</button>
+              </div>
+            </div>
+          </div>
+          <h3>共享内存</h3>
+          <div class="row">
+            <input id="shmP1" class="sm" type="number" placeholder="PID1" />
+            <input id="shmP2" class="sm" type="number" placeholder="PID2" />
+            <input id="shmPages" class="xs" type="number" placeholder="页数" />
+            <button class="btn-purple" onclick="shareMem()">建立共享内存</button>
+          </div>
+        </div>
+
+        <div class="panel" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+          <h2>💻 交互控制台 Shell</h2>
+          <div class="term">
+            <div id="terminalOutput" class="term-out"><span class="info">[System]</span> 欢迎进入 OS Web 终端。输入 help 查看全部命令。
+</div>
+            <div class="term-line">
+              <span class="ok">root#</span>
+              <input id="cmdInput" placeholder="输入系统指令..." autocomplete="off" />
+              <button class="btn-green" onclick="sendCommand()">发送</button>
+              <button onclick="sendDirectCmd('help')">help</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // 兼容两种打开方式：直接双击 file:// 打开时请求 localhost；通过后端访问时使用相对路径。
+    const API_BASE = location.protocol === 'file:' ? 'http://localhost:8080/api' : '/api';
+    let statusTimer = null;
+    let selectedFsName = '';
+    let selectedFsType = '';
+
+    function esc(v) {
+      return String(v ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));
+    }
+    function q(v) {
+      const s = String(v ?? "");
+      return /\s|['"\\]/.test(s) ? '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"' : s;
+    }
+    function val(id) { return document.getElementById(id).value.trim(); }
+    function setText(id, text) { const el = document.getElementById(id); if (el) el.innerText = text; }
+    function appendTerm(text, color) {
+      const term = document.getElementById('terminalOutput');
+      const span = document.createElement('div');
+      span.style.color = color || '#0f0';
+      span.textContent = text;
+      term.appendChild(span);
+      term.scrollTop = term.scrollHeight;
+    }
+
+    async function startBoot() {
+      document.getElementById('powerBtn').style.display = 'none';
+      const term = document.getElementById('bootTerminal');
+      term.style.display = 'block';
+      try {
+        const res = await fetch(`${API_BASE}/boot`, { method: 'POST' });
+        const data = await res.json();
+        const logs = data.logs || [];
+        for (const line of logs) {
+          const div = document.createElement('div');
+          div.textContent = line;
+          term.appendChild(div);
+          term.scrollTop = term.scrollHeight;
+          await new Promise(r => setTimeout(r, 35 + Math.random() * 55));
+        }
+        term.innerHTML += '<br><div style="color:#fff;">[OK] Entering Dashboard...</div>';
+        await new Promise(r => setTimeout(r, 550));
+        document.getElementById('bootScreen').style.display = 'none';
+        const app = document.getElementById('app');
+        app.style.display = 'flex';
+        setTimeout(() => app.style.opacity = '1', 30);
+        startStatusLoop();
+      } catch (err) {
+        term.innerHTML += '<br><div style="color:red;">[Fatal Error] 无法连接内核。请确认 os_kernel 已运行，且监听 8080 端口。</div>';
+      }
+    }
+
+    function startStatusLoop() {
+      refreshAll();
+      if (statusTimer) clearInterval(statusTimer);
+      statusTimer = setInterval(refreshAll, 1000);
+    }
+
+    async function refreshAll() {
+      try {
+        const res = await fetch(`${API_BASE}/status`);
+        const data = await res.json();
+        renderStatus(data);
+      } catch (e) {
+        setText('nowTime', '断线');
+      }
+      try {
+        const res = await fetch(`${API_BASE}/files`);
+        renderFiles(await res.json());
+      } catch (e) {}
+    }
+
+    function renderStatus(data) {
+      setText('nowTime', data.nowTime ?? 0);
+      setText('currentAlgo', data.currentAlgo ?? '未知');
+      setText('cwd', data.cwd ?? '/');
+      setText('processCount', data.processCount ?? 0);
+
+      const hits = Number(data.tlb_hits ?? data.tlb?.hits ?? 0);
+      const misses = Number(data.tlb_misses ?? data.tlb?.misses ?? 0);
+      const total = hits + misses;
+      setText('tlbHitRate', total ? ((hits / total) * 100).toFixed(1) + '%' : '0%');
+      setText('pageFaults', data.page_faults ?? data.memoryStats?.pageFaults ?? 0);
+      setText('memAccesses', data.memory_accesses ?? data.memoryStats?.accesses ?? 0);
+      setText('segFaults', data.segment_faults ?? data.memoryStats?.segmentFaults ?? 0);
+      setText('pageHits', data.page_hits ?? data.memoryStats?.pageHits ?? 0);
+      setText('replacementPolicy', data.replacementPolicy ?? '-');
+      setText('activePages', Array.isArray(data.activePhysicalPages) ? data.activePhysicalPages.length : (data.activePhysicalPages ?? '-'));
+
+      const activePages = Array.isArray(data.activePhysicalPages) ? data.activePhysicalPages : [];
+      const active = new Set(activePages);
+      document.getElementById('memoryGrid').innerHTML = (data.memoryBitmap || []).map((pid, idx) =>
+        `<div class="mem-block ${pid !== -1 ? 'used' : ''} ${active.has(idx) ? 'active' : ''}" title="Frame ${idx}">${pid !== -1 ? 'P' + esc(pid) : idx}</div>`
+      ).join('');
+
+      const rp = data.runningProcess;
+      document.getElementById('runningBox').innerHTML = rp ?
+        `<span>当前运行</span><span class="value">P${esc(rp.pid)} ${esc(rp.name)} / 余时 ${esc(rp.remainTime)}</span>` :
+        `<span>当前运行</span><span class="value">无</span>`;
+
+      renderReady(data.readyQueue || []);
+      renderBlocked(data.blockQueue || []);
+      renderSuspend(data.suspendQueue || []);
+      renderFinished(data.finishedQueue || []);
+      const ps = data.processStats || {};
+      setText('finishedCount', ps.finishedCount ?? 0);
+      setText('avgTurn', Number(ps.avgTurnaroundTime ?? 0).toFixed(2));
+      setText('avgResp', Number(ps.avgResponseTime ?? 0).toFixed(2));
+      setText('avgWTurn', Number(ps.avgWeightedTurnaround ?? 0).toFixed(2));
+
+      renderDevices(data.devices || []);
+      renderBanker(data.banker || {});
+      renderSemaphores(data.semaphores || []);
+      renderMessages(data.messages || []);
+    }
+
+    function renderReady(list) {
+      document.getElementById('readyQueueBody').innerHTML = list.length ? list.map(p =>
+        `<tr><td>${esc(p.pid)}</td><td>${esc(p.name)}</td><td>${esc(p.remainTime)}</td><td>${esc(p.priority)} / ${esc(p.dynamicPriority)}</td><td><button class="btn-red" onclick="sendDirectCmd('kill ${esc(p.pid)}')">Kill</button> <button class="btn-purple" onclick="sendDirectCmd('suspend ${esc(p.pid)}')">挂起</button></td></tr>`
+      ).join('') : '<tr><td colspan="5" class="small">空</td></tr>';
+    }
+    function renderBlocked(list) {
+      document.getElementById('blockQueueBody').innerHTML = list.length ? list.map(p =>
+        `<tr><td>${esc(p.pid)}</td><td>${esc(p.name)}</td><td>${esc(p.blockReason || '阻塞')} ${p.blockRemain ? '(' + esc(p.blockRemain) + ')' : ''}</td><td><button class="btn-green" onclick="sendDirectCmd('wakeup ${esc(p.pid)}')">唤醒</button> <button class="btn-red" onclick="sendDirectCmd('kill ${esc(p.pid)}')">Kill</button></td></tr>`
+      ).join('') : '<tr><td colspan="4" class="small">空</td></tr>';
+    }
+    function renderSuspend(list) {
+      document.getElementById('suspendQueueBody').innerHTML = list.length ? list.map(p =>
+        `<tr><td>${esc(p.pid)}</td><td>${esc(p.name)}</td><td>${esc(p.size)}</td><td><button class="btn-blue" onclick="sendDirectCmd('resume ${esc(p.pid)}')">恢复</button></td></tr>`
+      ).join('') : '<tr><td colspan="4" class="small">空</td></tr>';
+    }
+    function renderFinished(list) {
+      document.getElementById('finishedQueueBody').innerHTML = list.length ? list.slice(-20).reverse().map(p =>
+        `<tr><td>${esc(p.pid)}</td><td>${esc(p.name)}</td><td>${esc(p.turnaroundTime)}</td><td>${Number(p.weightedTurnaround ?? 0).toFixed(2)}</td></tr>`
+      ).join('') : '<tr><td colspan="4" class="small">空</td></tr>';
+    }
+
+    function jsStr(v) {
+      return JSON.stringify(String(v ?? ''));
+    }
+
+    function renderFiles(files) {
+      const box = document.getElementById('fileList');
+      if (!files || !files.length) {
+        box.innerHTML = '<div class="small">当前目录为空</div>';
+        return;
+      }
+      box.innerHTML = files.map(f => {
+        const name = String(f.name ?? '');
+        const type = String(f.type ?? '');
+        const isDir = type.toLowerCase().includes('dir');
+        const blocks = (f.blocks || []).join(',') || f.location || '-';
+        return `<div class="file-item ${isDir ? 'dir' : ''}" onclick="selectFile(${jsStr(name)})">
+          <div><b>${isDir ? '📁' : '📄'} ${esc(name)}</b> <span class="badge">${esc(f.permission || '')}</span></div>
+          <div class="small">${esc(type)} | inode ${esc(f.inode ?? '-')} | ${esc(f.size ?? 0)}B</div>
+          <div class="small">blocks: ${esc(blocks)}</div>
+          <div class="file-actions">
+            ${isDir ? `<button class="btn-blue" onclick="event.stopPropagation(); cdDir(${jsStr(name)})">进入</button>` : `<button onclick="event.stopPropagation(); selectFile(${jsStr(name)})">详情</button>`}
+            <button onclick="event.stopPropagation(); document.getElementById('fsName').value=${jsStr(name)}; fsCmd('stat')">stat</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderDevices(devices) {
+      document.getElementById('deviceGrid').innerHTML = devices.map(d =>
+        `<div class="device-card ${d.isBusy ? 'busy' : ''}">
+          <div><b>${esc(d.name)}</b> <span class="badge">ID ${esc(d.id)}</span> ${d.isBusy ? `<span class="bad">P${esc(d.currentPID)} 占用</span>` : '<span class="ok">空闲</span>'}</div>
+          <div class="small">等待队列: ${(d.waitQueue || []).length ? 'P' + (d.waitQueue || []).join(', P') : '无'}</div>
+          <div class="row" style="margin-top:6px;"><input id="devInput_${esc(d.id)}" class="sm" type="number" placeholder="PID" /><button class="btn-yellow" onclick="reqDev(${esc(d.id)})">分配</button></div>
+        </div>`
+      ).join('');
+    }
+
+    function renderBanker(b) {
+      const safe = b.safe;
+      const safeEl = document.getElementById('bankerSafe');
+      safeEl.innerText = safe === undefined ? '未知' : (safe ? '安全' : '不安全');
+      safeEl.className = 'value ' + (safe ? 'ok' : 'bad');
+      const pids = Array.from(new Set([...Object.keys(b.max || {}), ...Object.keys(b.allocation || {}), ...Object.keys(b.need || {})])).sort((a,b) => Number(a)-Number(b));
+      let html = `<div class="small">Available: [${esc((b.available || []).join(', '))}]</div>`;
+      if (pids.length) {
+        html += '<div class="table-wrap" style="max-height:170px; margin-top:6px;"><table><thead><tr><th>PID</th><th>Max</th><th>Allocation</th><th>Need</th></tr></thead><tbody>';
+        html += pids.map(pid => `<tr><td>P${esc(pid)}</td><td>[${esc((b.max?.[pid] || []).join(', '))}]</td><td>[${esc((b.allocation?.[pid] || []).join(', '))}]</td><td>[${esc((b.need?.[pid] || []).join(', '))}]</td></tr>`).join('');
+        html += '</tbody></table></div>';
+      } else html += '<div class="small">暂无矩阵数据</div>';
+      document.getElementById('bankerMatrix').innerHTML = html;
+    }
+
+    function renderSemaphores(list) {
+      const box = document.getElementById('semContainer');
+      box.innerHTML = list.length ? list.map(s => `<div style="border-bottom:1px solid #3b3c55; padding:4px 0;">🚦 <b>${esc(s.name)}</b> = <span class="value">${esc(s.value)}</span><br><span class="small">等待: ${(s.waitQueue || []).length ? 'P' + s.waitQueue.join(', P') : '无'}</span></div>`).join('') : '<span class="small">无</span>';
+    }
+    function renderMessages(list) {
+      const box = document.getElementById('msgContainer');
+      box.innerHTML = list.length ? list.map(m => `<div>📬 P${esc(m.pid)}: <b class="value">${esc(m.count)}</b> 条</div>`).join('') : '<span class="small">空</span>';
+    }
+
+    async function sendDirectCmd(cmd) {
+      appendTerm('root# ' + cmd, '#fff');
+      try {
+        const res = await fetch(`${API_BASE}/command`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ command: cmd }) });
+        const data = await res.json();
+        appendTerm('[Kernel] ' + (data.msg || data.status || ''), data.status === 'success' ? '#0f0' : '#f44336');
+        refreshAll();
+      } catch (e) {
+        appendTerm('[Error] 命令发送失败，请检查后端服务。', '#f44336');
+      }
+    }
+    function sendCommand() {
+      const input = document.getElementById('cmdInput');
+      const cmd = input.value.trim();
+      if (cmd) { sendDirectCmd(cmd); input.value = ''; }
+    }
+    document.getElementById('cmdInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendCommand(); });
+
+    function uiCreateProcess() {
+      const name = val('pName') || 'P_New';
+      const time = val('pTime') || '10';
+      const mem = val('pMem') || '64000';
+      const pri = val('pPri') || '5';
+      sendDirectCmd(`create ${q(name)} ${time} ${mem} ${pri}`);
+    }
+    function cmdWithPid(cmd) {
+      const pid = val('opPid');
+      if (!pid) return appendTerm('[UI] 请先填写 PID', '#ffc107');
+      sendDirectCmd(`${cmd} ${pid}`);
+    }
+    function blockPid() {
+      const pid = val('opPid');
+      if (!pid) return appendTerm('[UI] 请先填写 PID', '#ffc107');
+      const ticks = val('blockTicks') || '0';
+      const reason = val('blockReason') || '手动阻塞';
+      sendDirectCmd(`block ${pid} ${ticks} ${q(reason)}`);
+    }
+    function accessAddr() {
+      const pid = val('memPid'), addr = val('memAddr');
+      if (!pid || !addr) return appendTerm('[UI] 请填写 PID 和逻辑地址', '#ffc107');
+      sendDirectCmd(`access ${pid} ${addr}`);
+    }
+    function translateAddr() {
+      const pid = val('memPid'), addr = val('memAddr');
+      if (!pid || !addr) return appendTerm('[UI] 请填写 PID 和逻辑地址', '#ffc107');
+      sendDirectCmd(`translate ${pid} ${addr}`);
+    }
+    function resizeProcess() {
+      const pid = val('resizePid'), delta = val('resizeDelta');
+      if (!pid || !delta) return appendTerm('[UI] 请填写 PID 和 deltaBytes', '#ffc107');
+      sendDirectCmd(`resize ${pid} ${delta}`);
+    }
+
+    function fsCmd(cmd) {
+      const name = val('fsName');
+      if (!name) return appendTerm('[UI] 请填写文件/目录名', '#ffc107');
+      sendDirectCmd(`${cmd} ${q(name)}`);
+    }
+    async function selectFile(name) {
+      selectedFsName = String(name ?? '');
+      document.getElementById('fsName').value = selectedFsName;
+      document.getElementById('fsWriteName').value = selectedFsName;
+      appendTerm(`[UI] 已选择文件/目录: ${selectedFsName}`, '#03a9f4');
+
+      const detail = document.getElementById('fileDetail');
+      if (detail) detail.innerHTML = `正在读取 <b>${esc(selectedFsName)}</b> 的详情...`;
+      try {
+        const res = await fetch(`${API_BASE}/file/${encodeURIComponent(selectedFsName)}`);
+        const data = await res.json();
+        if (!res.ok || data.status === 'error') throw new Error(data.msg || '读取失败');
+
+        selectedFsType = String(data.type || '').toLowerCase();
+        const blocks = (data.blocks || []).join(', ') || data.location || '-';
+        const permission = data.permission || (data.readonly ? 'ro' : 'rw');
+        const meta = `inode=${data.inode ?? '-'} | type=${data.type ?? '-'} | size=${data.size ?? 0}B | permission=${permission} | blocks=${blocks}`;
+        appendTerm(`[File] ${selectedFsName} | ${meta}`, '#03a9f4');
+
+        if (detail) {
+          detail.innerHTML = `
+            <div><b>${selectedFsType.includes('dir') ? '📁' : '📄'} ${esc(data.name ?? selectedFsName)}</b></div>
+            <div>inode: <span class="value">${esc(data.inode ?? '-')}</span>　type: <span class="value">${esc(data.type ?? '-')}</span>　size: <span class="value">${esc(data.size ?? 0)}B</span></div>
+            <div>permission: <span class="value">${esc(permission)}</span>　blocks: <span class="value">${esc(blocks)}</span></div>
+            ${selectedFsType.includes('dir') ? '<div class="small">这是目录，可点击“进入目录”或目录卡片上的“进入”。</div>' : ''}
+          `;
+        }
+
+        if (data.content !== undefined && !selectedFsType.includes('dir')) {
+          document.getElementById('fsContent').value = data.content;
+        }
+      } catch (e) {
+        selectedFsType = '';
+        if (detail) detail.innerHTML = `<span class="bad">文件详情读取失败：</span>${esc(e.message || e)}`;
+        appendTerm(`[UI] 文件详情读取失败: ${e.message || e}`, '#f44336');
+      }
+    }
+
+    function cdDir(name) {
+      selectedFsName = String(name ?? selectedFsName ?? '');
+      if (!selectedFsName) return appendTerm('[UI] 请先选择目录', '#ffc107');
+      document.getElementById('fsName').value = selectedFsName;
+      sendDirectCmd(`cd ${q(selectedFsName)}`);
+    }
+
+    function enterSelectedDir() {
+      const name = val('fsName') || selectedFsName;
+      if (!name) return appendTerm('[UI] 请先选择或填写目录名', '#ffc107');
+      sendDirectCmd(`cd ${q(name)}`);
+    }
+    function renameFile() {
+      const oldName = val('fsOld') || val('fsName');
+      const newName = val('fsNew');
+      if (!oldName || !newName) return appendTerm('[UI] 请填写旧名和新名', '#ffc107');
+      sendDirectCmd(`rename ${q(oldName)} ${q(newName)}`);
+    }
+    function chmodFile() {
+      const name = val('fsName');
+      const mode = val('fsMode') || 'rw';
+      if (!name) return appendTerm('[UI] 请填写文件名', '#ffc107');
+      sendDirectCmd(`chmod ${q(name)} ${mode}`);
+    }
+    function readAtFile() {
+      const name = val('fsWriteName') || val('fsName');
+      const offset = val('fsOffset') || '0';
+      const len = val('fsReadLen') || '1024';
+      if (!name) return appendTerm('[UI] 请填写目标文件', '#ffc107');
+      sendDirectCmd(`read_at ${q(name)} ${offset} ${len}`);
+    }
+
+    function writeFile(withOffset) {
+      const name = val('fsWriteName') || val('fsName');
+      const content = document.getElementById('fsContent').value;
+      if (!name) return appendTerm('[UI] 请填写目标文件', '#ffc107');
+      if (withOffset) {
+        const offset = val('fsOffset') || '0';
+        sendDirectCmd(`write_at ${q(name)} ${offset} ${q(content)}`);
+      } else sendDirectCmd(`write ${q(name)} ${q(content)}`);
+    }
+    function confirmFormat() {
+      if (confirm('确认格式化虚拟文件系统？这会清空当前目录数据。')) sendDirectCmd('format');
+    }
+
+    function reqDev(devId) {
+      const pid = val(`devInput_${devId}`);
+      if (!pid) return appendTerm('[UI] 请填写 PID', '#ffc107');
+      sendDirectCmd(`io ${pid} ${devId}`);
+    }
+    function requestDevice() {
+      const pid = val('devPid'), id = val('devId');
+      if (!pid || !id) return appendTerm('[UI] 请填写 PID 和设备 ID', '#ffc107');
+      sendDirectCmd(`io ${pid} ${id}`);
+    }
+    function releaseDevice() {
+      const pid = val('devPid');
+      if (!pid) return appendTerm('[UI] 请填写 PID', '#ffc107');
+      sendDirectCmd(`release ${pid}`);
+    }
+
+    function createSem() {
+      const name = val('semName'), init = val('semVal') || '1';
+      if (!name) return appendTerm('[UI] 请填写信号量名', '#ffc107');
+      sendDirectCmd(`sem_create ${q(name)} ${init}`);
+    }
+    function semP() {
+      const name = val('semName'), pid = val('semPid');
+      if (!name || !pid) return appendTerm('[UI] 请填写信号量名和 PID', '#ffc107');
+      sendDirectCmd(`P ${q(name)} ${pid}`);
+    }
+    function semV() {
+      const name = val('semName');
+      if (!name) return appendTerm('[UI] 请填写信号量名', '#ffc107');
+      sendDirectCmd(`V ${q(name)}`);
+    }
+    function sendMsg() {
+      const from = val('msgFrom'), to = val('msgTo'), text = document.getElementById('msgText').value;
+      if (!from || !to) return appendTerm('[UI] 请填写 from/to PID', '#ffc107');
+      sendDirectCmd(`msg_send ${from} ${to} ${q(text)}`);
+    }
+    function readMsg() {
+      const pid = val('msgReadPid');
+      if (!pid) return appendTerm('[UI] 请填写读取消息的 PID', '#ffc107');
+      sendDirectCmd(`msg_read ${pid}`);
+    }
+    function shareMem() {
+      const p1 = val('shmP1'), p2 = val('shmP2'), pages = val('shmPages') || '1';
+      if (!p1 || !p2) return appendTerm('[UI] 请填写 PID1 和 PID2', '#ffc107');
+      sendDirectCmd(`shm ${p1} ${p2} ${pages}`);
+    }
+  </script>
+</body>
+</html>
